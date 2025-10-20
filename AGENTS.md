@@ -1,4 +1,4 @@
-# 仓库指南
+﻿# 仓库指南
 
 ## 项目结构与模块
 - 前端（Vue 3 + Vite）：`src/`，入口 `src/main.js`，根组件 `src/App.vue`，视图在 `src/views/`，状态在 `src/stores/`，路由在 `src/router/`，样式在 `src/style.css`，静态资源在 `public/`。配置文件：`vite.config.js`、`tailwind.config.js`、`postcss.config.js`。
