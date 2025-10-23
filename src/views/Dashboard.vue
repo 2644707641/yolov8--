@@ -219,12 +219,23 @@
                 <p class="text-lg font-medium text-white/90">点击或拖动模型文件到此处</p>
                 <p class="text-sm text-slate-400/80">支持格式：.pt、.pth</p>
               </div>
-              <div v-else-if="detectionStore.modelUploaded" class="space-y-2 text-emerald-200">
+              <div v-else-if="detectionStore.modelUploaded" class="space-y-3 text-emerald-200">
                 <svg class="mx-auto h-12 w-12 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                 </svg>
-                <p class="text-base font-semibold text-white">模型已上传完成</p>
+                <p class="text-base font-semibold text-white">模型已上传完毕</p>
                 <p class="text-sm text-emerald-200/80">{{ detectionStore.modelFile?.name || selectedModelName }}</p>
+                <button
+                  type="button"
+                  @click.stop="reselectModel"
+                  class="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-300/60 bg-transparent px-4 py-1.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/20"
+                >
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.45 2A8.5 8.5 0 1111.5 3v0"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4l2.5 1.5"></path>
+                  </svg>
+                  重新选择模型
+                </button>
               </div>
               <div v-else class="space-y-3 text-amber-100">
                 <svg class="mx-auto h-12 w-12 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -645,19 +656,19 @@
                     <h3 class="text-sm font-semibold text-white/90">原始素材</h3>
                     <button type="button" class="btn-ghost text-xs" @click="openPreview('original')">放大查看</button>
                   </div>
-                  <div class="relative mt-4 overflow-hidden rounded-2xl border border-white/10">
+                  <div class="relative mt-4 flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-900/35 px-8 py-6">
                     <img
                       v-if="fileType === 'image'"
                       :src="detectionStore.currentResult.originalUrl"
                       @error="handleImageError($event, '原始图片')"
-                      class="w-full object-cover"
+                      class="max-h-[420px] w-full object-contain"
                       alt="原始素材预览"
                     />
                     <video
                       v-else
                       :src="detectionStore.currentResult.originalUrl"
                       controls
-                      class="w-full rounded-2xl"
+                      class="max-h-[420px] w-full rounded-xl object-contain"
                     ></video>
                     <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                   </div>
@@ -667,19 +678,19 @@
                     <h3 class="text-sm font-semibold text-white/90">识别结果</h3>
                     <button type="button" class="btn-ghost text-xs" @click="openPreview('result')">放大查看</button>
                   </div>
-                  <div class="relative mt-4 overflow-hidden rounded-2xl border border-white/10">
+                  <div class="relative mt-4 flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-900/35 px-8 py-6">
                     <img
                       v-if="fileType === 'image'"
                       :src="detectionStore.currentResult.resultUrl"
                       @error="handleImageError($event, '结果图片')"
-                      class="w-full object-cover"
+                      class="max-h-[420px] w-full object-contain"
                       alt="识别结果预览"
                     />
                     <video
                       v-else
                       :src="detectionStore.currentResult.resultUrl"
                       controls
-                      class="w-full rounded-2xl"
+                      class="max-h-[420px] w-full rounded-xl object-contain"
                     ></video>
                     <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                   </div>
@@ -769,7 +780,7 @@
 
       <div
         :class="[
-          'relative h-[80vh] w-full max-w-6xl rounded-3xl border border-white/10 bg-white/5 px-8 py-10 shadow-[0_35px_120px_rgba(8,15,40,0.55)]',
+          'relative h-[88vh] w-full max-w-[96vw] rounded-3xl border border-white/10 bg-white/5 px-16 py-10 shadow-[0_35px_120px_rgba(8,15,40,0.55)]',
           previewMode === 'both' ? 'grid grid-cols-2 gap-6' : 'flex items-center justify-center'
         ]"
         @click.stop
@@ -801,7 +812,7 @@
                 transition: isDragging ? 'none' : 'transform 0.1s',
                 transformOrigin: 'center center'
               }"
-              class="max-h-full max-w-full select-none object-contain"
+              class="h-full w-full select-none object-cover"
               alt="原始素材"
               draggable="false"
             />
@@ -841,7 +852,7 @@
                 transition: isDragging ? 'none' : 'transform 0.1s',
                 transformOrigin: 'center center'
               }"
-              class="max-h-full max-w-full select-none object-contain"
+              class="h-full w-full select-none object-cover"
               alt="识别结果"
               draggable="false"
             />
@@ -939,6 +950,17 @@ const uploadModelFile = async (file) => {
 const retryUpload = async () => {
   if (pendingModelFile) {
     await uploadModelFile(pendingModelFile)
+  }
+}
+
+const reselectModel = () => {
+  pendingModelFile = null
+  selectedModelName.value = ''
+  uploadError.value = null
+  detectionStore.modelFile = null
+  detectionStore.modelUploaded = false
+  if (modelInput.value) {
+    modelInput.value.value = ''
   }
 }
 

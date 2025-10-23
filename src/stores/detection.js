@@ -20,18 +20,26 @@ export const useDetectionStore = defineStore('detection', () => {
   const currentResult = ref(null)
 
   // 上传模型文件到后端
+  const getAuthHeader = async () => {
+    const { data: { session }, error } = await supabase.auth.getSession()
+    if (error || !session?.access_token) {
+      throw new Error('未检测到有效的登录会话，请重新登录后重试')
+    }
+    return `Bearer ${session.access_token}`
+  }
+
   const uploadModel = async (file) => {
     try {
       isProcessing.value = true
       const formData = new FormData()
       formData.append('model', file)
       
-      const { data: { user } } = await supabase.auth.getUser()
+      const authHeader = await getAuthHeader()
       
       const response = await axios.post(`${API_URL}/api/upload-model`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${user.id}`
+          'Authorization': authHeader
         }
       })
       
@@ -71,12 +79,12 @@ export const useDetectionStore = defineStore('detection', () => {
       formData.append('type', type)
       formData.append('params', JSON.stringify(detectionParams.value))
       
-      const { data: { user } } = await supabase.auth.getUser()
+      const authHeader = await getAuthHeader()
       
       const response = await axios.post(`${API_URL}/api/detect`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${user.id}`
+          'Authorization': authHeader
         }
       })
       
