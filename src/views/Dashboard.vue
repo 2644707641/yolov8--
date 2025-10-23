@@ -1,49 +1,74 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <!-- 导航栏 -->
-    <nav class="bg-white shadow-sm">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16 items-center">
-          <div class="flex items-center">
-            <h1 class="text-xl font-bold text-gray-900">YOLOv8 智能识别停车位系统</h1>
+  <div class="relative min-h-screen overflow-hidden">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-black"></div>
+      <div class="absolute inset-0 bg-grid opacity-10"></div>
+      <div class="absolute -top-28 -left-32 h-96 w-96 rounded-full bg-primary-500/30 blur-3xl"></div>
+      <div class="absolute top-1/3 right-[-120px] h-[420px] w-[420px] rounded-full bg-accent-500/20 blur-3xl"></div>
+    </div>
+    <div class="relative z-10 flex min-h-screen flex-col">
+      <!-- 导航栏 -->
+      <nav class="sticky top-0 z-20 border-b border-white/10 bg-white/5 backdrop-blur-xl">
+        <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-6">
+          <div>
+            <span class="pill">YOLOv8 Suite</span>
+            <h1 class="mt-2 text-2xl font-semibold leading-tight text-gradient">
+              智能停车位识别控制台
+            </h1>
           </div>
-          <div class="flex items-center space-x-4">
+          <div class="flex items-center gap-4">
+            <div class="hidden text-right text-[11px] uppercase tracking-[0.32em] text-slate-400/80 md:flex md:flex-col">
+              <span class="text-[11px] text-slate-300/80">当前账户</span>
+              <span class="text-sm font-medium text-white">{{ authStore.user?.email }}</span>
+            </div>
             <router-link
               to="/history"
-              class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+              class="btn-secondary text-sm"
             >
               历史记录
             </router-link>
-            <div class="text-sm text-gray-600">{{ authStore.user?.email }}</div>
-            <button @click="authStore.logout" class="btn-secondary text-sm">
+            <button @click="authStore.logout" class="btn-ghost text-sm">
               退出登录
             </button>
           </div>
         </div>
-      </div>
-    </nav>
+      </nav>
 
     <!-- 主要内容 -->
-    <div class="flex h-[calc(100vh-4rem)]">
+    <div class="flex flex-1 flex-col overflow-hidden lg:flex-row">
       <!-- 左侧导航栏 -->
-      <div class="w-80 bg-white border-r border-gray-200 overflow-y-auto">
-        <div class="p-4">
-          <h2 class="text-lg font-semibold text-gray-800 mb-4">操作步骤</h2>
-          <div class="space-y-2">
+      <div class="border-b border-white/10 bg-white/5 px-6 py-8 backdrop-blur-xl lg:w-80 lg:border-b-0 lg:border-r">
+        <div class="space-y-6">
+          <div>
+            <p class="section-title">流程</p>
+            <h2 class="mt-3 text-lg font-semibold text-white">四步完成识别</h2>
+            <p class="mt-2 text-sm text-slate-300/80">
+              从模型到结果，全链路智能协同。
+            </p>
+          </div>
+          <div class="space-y-3">
           <!-- 导航项 1 -->
           <button
             @click="currentStep = 1"
             :class="[
-              'w-full text-left px-4 py-3 rounded-lg transition-all',
+              'group w-full rounded-2xl border border-white/10 px-5 py-4 text-left transition-all duration-300',
               currentStep === 1 
-                ? 'bg-primary-600 text-white shadow-md' 
-                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                ? 'bg-gradient-to-r from-primary-500/80 to-primary-400/70 text-white shadow-[0_18px_35px_rgba(37,99,235,0.45)]'
+                : 'bg-white/5 text-slate-200 hover:bg-white/8 hover:border-white/20'
             ]"
           >
-            <div class="flex items-center">
-              <span class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" :class="currentStep === 1 ? 'bg-white text-primary-600' : 'bg-gray-200 text-gray-600'">1</span>
-              <span class="ml-3 font-medium">上传模型权重</span>
-              <svg v-if="detectionStore.modelUploaded" class="ml-auto h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="flex items-center gap-4">
+              <span
+                class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-sm font-semibold transition-all duration-300"
+                :class="currentStep === 1 ? 'bg-white/25 text-white shadow-[0_0_18px_rgba(255,255,255,0.35)]' : 'bg-white/10 text-slate-300'"
+              >
+                01
+              </span>
+              <div class="flex-1">
+                <span class="text-base font-semibold leading-tight">上传模型权重</span>
+                <p class="mt-1 text-xs text-slate-300/70">导入 YOLOv8 自定义权重文件</p>
+              </div>
+              <svg v-if="detectionStore.modelUploaded" class="h-5 w-5 text-emerald-400 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
             </div>
@@ -53,16 +78,24 @@
           <button
             @click="currentStep = 2"
             :class="[
-              'w-full text-left px-4 py-3 rounded-lg transition-all',
+              'group w-full rounded-2xl border border-white/10 px-5 py-4 text-left transition-all duration-300',
               currentStep === 2 
-                ? 'bg-primary-600 text-white shadow-md' 
-                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                ? 'bg-gradient-to-r from-accent-500/70 via-primary-500/70 to-primary-500/60 text-white shadow-[0_18px_35px_rgba(168,85,247,0.45)]'
+                : 'bg-white/5 text-slate-200 hover:bg-white/8 hover:border-white/20'
             ]"
           >
-            <div class="flex items-center">
-              <span class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" :class="currentStep === 2 ? 'bg-white text-primary-600' : 'bg-gray-200 text-gray-600'">2</span>
-              <span class="ml-3 font-medium">上传文件</span>
-              <svg v-if="selectedFile" class="ml-auto h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="flex items-center gap-4">
+              <span
+                class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-sm font-semibold transition-all duration-300"
+                :class="currentStep === 2 ? 'bg-white/25 text-white shadow-[0_0_18px_rgba(255,255,255,0.35)]' : 'bg-white/10 text-slate-300'"
+              >
+                02
+              </span>
+              <div class="flex-1">
+                <span class="text-base font-semibold leading-tight">上传文件</span>
+                <p class="mt-1 text-xs text-slate-300/70">支持图片与视频两种输入形态</p>
+              </div>
+              <svg v-if="selectedFile" class="h-5 w-5 text-emerald-400 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
             </div>
@@ -72,15 +105,23 @@
           <button
             @click="currentStep = 3"
             :class="[
-              'w-full text-left px-4 py-3 rounded-lg transition-all',
+              'group w-full rounded-2xl border border-white/10 px-5 py-4 text-left transition-all duration-300',
               currentStep === 3 
-                ? 'bg-primary-600 text-white shadow-md' 
-                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                ? 'bg-gradient-to-r from-slate-600/70 to-slate-500/70 text-white shadow-[0_18px_35px_rgba(30,64,175,0.45)]'
+                : 'bg-white/5 text-slate-200 hover:bg-white/8 hover:border-white/20'
             ]"
           >
-            <div class="flex items-center">
-              <span class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" :class="currentStep === 3 ? 'bg-white text-primary-600' : 'bg-gray-200 text-gray-600'">3</span>
-              <span class="ml-3 font-medium">调整参数</span>
+            <div class="flex items-center gap-4">
+              <span
+                class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-sm font-semibold transition-all duration-300"
+                :class="currentStep === 3 ? 'bg-white/25 text-white shadow-[0_0_18px_rgba(255,255,255,0.35)]' : 'bg-white/10 text-slate-300'"
+              >
+                03
+              </span>
+              <div class="flex-1">
+                <span class="text-base font-semibold leading-tight">调整参数</span>
+                <p class="mt-1 text-xs text-slate-300/70">灵活调节分辨率与阈值，平衡精度与速度</p>
+              </div>
             </div>
           </button>
 
@@ -88,16 +129,24 @@
           <button
             @click="currentStep = 4"
             :class="[
-              'w-full text-left px-4 py-3 rounded-lg transition-all',
+              'group w-full rounded-2xl border border-white/10 px-5 py-4 text-left transition-all duration-300',
               currentStep === 4 
-                ? 'bg-primary-600 text-white shadow-md' 
-                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                ? 'bg-gradient-to-r from-emerald-500/70 via-primary-500/70 to-primary-500/60 text-white shadow-[0_18px_35px_rgba(16,185,129,0.45)]'
+                : 'bg-white/5 text-slate-200 hover:bg-white/8 hover:border-white/20'
             ]"
           >
-            <div class="flex items-center">
-              <span class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" :class="currentStep === 4 ? 'bg-white text-primary-600' : 'bg-gray-200 text-gray-600'">4</span>
-              <span class="ml-3 font-medium">识别结果</span>
-              <svg v-if="detectionStore.currentResult" class="ml-auto h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="flex items-center gap-4">
+              <span
+                class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-sm font-semibold transition-all duration-300"
+                :class="currentStep === 4 ? 'bg-white/25 text-white shadow-[0_0_18px_rgba(255,255,255,0.35)]' : 'bg-white/10 text-slate-300'"
+              >
+                04
+              </span>
+              <div class="flex-1">
+                <span class="text-base font-semibold leading-tight">识别结果</span>
+                <p class="mt-1 text-xs text-slate-300/70">查看原始输入与 AI 推断成果对比</p>
+              </div>
+              <svg v-if="detectionStore.currentResult" class="h-5 w-5 text-emerald-400 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
             </div>
@@ -105,152 +154,119 @@
           </div>
 
           <!-- 快速操作提示 -->
-          <div class="mt-6 p-4 bg-blue-50 rounded-lg">
-            <div class="flex items-start">
-              <svg class="h-5 w-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-900">提示</h3>
-                <p class="mt-1 text-xs text-blue-700">按照步骤依次操作，完成后会显示绿色勾选标记</p>
+          <div class="mt-8 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md">
+            <div class="flex items-start gap-3">
+              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-500/20 text-primary-200">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-sm font-semibold text-white">提示</h3>
+                <p class="mt-1 text-xs text-slate-300/80">按照步骤依次操作，完成后会显示绿色勾选标记。</p>
               </div>
             </div>
-          </div>
-
-          <!-- 隐藏的原有卡片内容，保留功能 -->
-          <div class="hidden">
-          <!-- 模型上传（隐藏但保留功能） -->
-          <div class="card">
-            <h2 class="text-lg font-semibold mb-4">上传模型权重</h2>
-            <div class="space-y-4">
-              <div
-                @dragover.prevent
-                @drop.prevent="handleModelDrop"
-                class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-500 transition-colors cursor-pointer"
-                @click="modelInput?.click()"
-              >
-                <input
-                  ref="modelInput"
-                  type="file"
-                  accept=".pt,.pth"
-                  @change="handleModelSelect"
-                  class="hidden"
-                />
-                <!-- 上传中状态 -->
-                <div v-if="isUploadingModel" class="text-primary-600">
-                  <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-                  <p class="mt-2 text-sm">正在上传模型...</p>
-                </div>
-                <!-- 未上传状态 -->
-                <div v-else-if="!detectionStore.modelUploaded && !selectedModelName">
-                  <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  <p class="mt-2 text-sm text-gray-600">拖拽或点击上传模型文件 (.pt, .pth)</p>
-                </div>
-                <!-- 已上传成功状态 -->
-                <div v-else-if="detectionStore.modelUploaded" class="text-green-600">
-                  <svg class="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                  </svg>
-                  <p class="mt-2 text-sm font-medium">模型已上传</p>
-                  <p class="text-xs text-gray-600">{{ detectionStore.modelFile?.name || selectedModelName }}</p>
-                </div>
-                <!-- 已选择但未成功上传状态 -->
-                <div v-else class="text-yellow-600">
-                  <svg class="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                  </svg>
-                  <p class="mt-2 text-sm font-medium">模型已选择（等待上传到后端）</p>
-                  <p class="text-xs text-gray-600">{{ selectedModelName }}</p>
-                  <button @click.stop="retryUpload" class="mt-2 text-xs text-primary-600 hover:text-primary-700 underline">
-                    重新上传
-                  </button>
-                </div>
-              </div>
-              
-              <!-- 错误提示 -->
-              <div v-if="uploadError" class="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <div class="flex items-start">
-                  <svg class="h-5 w-5 text-red-600 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  <div class="flex-1">
-                    <p class="text-sm text-red-800 font-medium">上传失败</p>
-                    <p class="text-xs text-red-600 mt-1">{{ uploadError }}</p>
-                    <p class="text-xs text-red-600 mt-1">请确保后端服务已启动（端口8000）</p>
-                  </div>
-                  <button @click="uploadError = null" class="text-red-600 hover:text-red-800">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 文件上传（隐藏但保留功能） -->
-          <div class="card">
-            <input
-              ref="fileInput"
-              type="file"
-              :accept="fileType === 'image' ? 'image/*' : 'video/*'"
-              @change="handleFileSelect"
-              class="hidden"
-            />
-          </div>
           </div>
         </div>
       </div>
 
       <!-- 右侧主展示区域 -->
-      <div class="flex-1 overflow-y-auto bg-gradient-to-br from-gray-50 to-gray-100">
-        <div class="max-w-5xl mx-auto p-8">
+      <div class="flex-1 overflow-y-auto px-6 py-10 lg:px-12">
+        <div class="mx-auto w-full max-w-6xl space-y-10">
           
           <!-- 步骤1：上传模型权重 -->
-          <div v-if="currentStep === 1" class="card shadow-lg">
-            <h2 class="text-2xl font-bold text-gray-900 mb-2">上传模型权重</h2>
-            <p class="text-sm text-gray-500 mb-6">上传你的 YOLOv8 模型文件（.pt 或 .pth 格式）</p>
-            
+          <div v-if="currentStep === 1" class="card">
+            <div class="relative mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p class="section-title">Step 01</p>
+                <h2 class="mt-3 text-2xl font-semibold text-white">上传模型权重</h2>
+                <p class="mt-2 text-sm text-slate-300/80">
+                  上传你的 YOLOv8 模型文件（支持 .pt / .pth），系统会自动完成版本校验与安全存储。
+                </p>
+              </div>
+              <button
+                v-if="detectionStore.modelUploaded"
+                class="btn-secondary self-start sm:self-auto"
+                @click="currentStep = 2"
+              >
+                继续下一步
+              </button>
+            </div>
+
             <div
               @dragover.prevent
               @drop.prevent="handleModelDrop"
-              class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-primary-500 transition-colors cursor-pointer bg-gray-50"
+              class="group relative rounded-3xl border-2 border-dashed border-white/15 bg-white/5 p-12 text-center transition-all duration-300 hover:border-primary-400/70 hover:bg-white/10"
               @click="modelInput?.click()"
             >
-              <svg class="mx-auto h-16 w-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-              </svg>
-              <p class="mt-4 text-lg font-medium text-gray-700">点击或拖动模型文件到此处</p>
-              <p class="mt-2 text-sm text-gray-500">支持格式：.pt, .pth</p>
-            </div>
-            
-            <div v-if="uploadStatus === 'uploading'" class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div class="flex items-center">
-                <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600"></div>
-                <p class="ml-3 text-sm text-blue-900">正在上传模型...</p>
+              <input
+                ref="modelInput"
+                type="file"
+                accept=".pt,.pth"
+                @change="handleModelSelect"
+                class="hidden"
+              />
+              <div v-if="isUploadingModel" class="flex flex-col items-center gap-3 text-primary-200">
+                <div class="h-14 w-14 animate-spin rounded-full border-2 border-primary-500/40 border-t-transparent"></div>
+                <p class="text-sm">正在上传模型...</p>
               </div>
-            </div>
-            
-            <div v-if="detectionStore.modelUploaded" class="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center">
-                  <svg class="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              <div v-else-if="!detectionStore.modelUploaded && !selectedModelName" class="space-y-4 text-slate-300/85">
+                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-primary-200">
+                  <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6H16a5 5 0 011 9.9m-4-2.9l-3-3m0 0l-3 3m3-3v12"></path>
                   </svg>
-                  <p class="ml-3 text-sm text-green-900 font-medium">模型上传成功！</p>
                 </div>
-                <button @click="currentStep = 2" class="btn-primary text-sm">
-                  下一步 →
+                <p class="text-lg font-medium text-white/90">点击或拖动模型文件到此处</p>
+                <p class="text-sm text-slate-400/80">支持格式：.pt、.pth</p>
+              </div>
+              <div v-else-if="detectionStore.modelUploaded" class="space-y-2 text-emerald-200">
+                <svg class="mx-auto h-12 w-12 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <p class="text-base font-semibold text-white">模型已上传完成</p>
+                <p class="text-sm text-emerald-200/80">{{ detectionStore.modelFile?.name || selectedModelName }}</p>
+              </div>
+              <div v-else class="space-y-3 text-amber-100">
+                <svg class="mx-auto h-12 w-12 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.1 19h13.8c1.54 0 2.5-1.66 1.73-3L13.73 4a2 2 0 00-3.46 0L3.37 16c-.77 1.34.19 3 1.73 3z"></path>
+                </svg>
+                <p class="text-sm font-medium text-white/90">模型已选择，等待上传至后端</p>
+                <p class="text-xs text-slate-300/70">{{ selectedModelName }}</p>
+                <button @click.stop="retryUpload" class="text-xs font-semibold text-amber-200/90 underline underline-offset-4 hover:text-amber-100">
+                  重新上传
                 </button>
               </div>
             </div>
-            
-            <div v-if="uploadError" class="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div class="flex items-center justify-between">
-                <p class="text-sm text-red-900">{{ uploadError }}</p>
-                <button @click="uploadError = null" class="text-red-600 hover:text-red-800">
+
+            <div v-if="detectionStore.modelUploaded" class="mt-8 flex flex-col gap-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex items-center gap-3 text-emerald-100">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p class="text-sm">模型已就绪，可以继续上传待识别文件。</p>
+              </div>
+              <button @click="currentStep = 2" class="btn-primary text-sm">
+                下一步
+              </button>
+            </div>
+
+            <div v-else-if="selectedModelName && !isUploadingModel" class="mt-8 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+              <p>
+                模型文件 <span class="font-medium">{{ selectedModelName }}</span> 已选择，点击上方区域上传至后端。
+              </p>
+            </div>
+
+            <div v-if="uploadError" class="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-100">
+              <div class="flex items-start gap-3">
+                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div class="flex-1 space-y-2">
+                  <p class="font-medium">上传失败</p>
+                  <p>{{ uploadError }}</p>
+                  <p class="text-xs text-red-200/80">请确认后端服务已启动（端口 8000）。</p>
+                </div>
+                <button @click="uploadError = null" class="text-red-200 hover:text-red-100">
                   <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                   </svg>
@@ -258,401 +274,447 @@
               </div>
             </div>
           </div>
-          
           <!-- 步骤2：上传文件 -->
-          <div v-if="currentStep === 2" class="card shadow-lg">
-            <h2 class="text-2xl font-bold text-gray-900 mb-2">上传文件</h2>
-            <p class="text-sm text-gray-500 mb-6">选择需要进行目标检测的图片或视频文件</p>
-            
-            <div class="grid grid-cols-2 gap-4 mb-6">
+          <div v-if="currentStep === 2" class="card">
+            <div class="relative mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p class="section-title">Step 02</p>
+                <h2 class="mt-3 text-2xl font-semibold text-white">选择识别素材</h2>
+                <p class="mt-2 text-sm text-slate-300/80">
+                  支持上传停车场图片或监控视频，系统会根据文件类型自动优化检测流程。
+                </p>
+              </div>
+              <span
+                v-if="selectedFile"
+                class="pill self-start sm:self-auto"
+              >
+                已选择 {{ selectedFile.name }}
+              </span>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
               <button
                 @click="fileType = 'image'"
                 :class="[
-                  'px-6 py-4 rounded-lg border-2 transition-all text-left',
-                  fileType === 'image' 
-                    ? 'border-primary-600 bg-primary-50' 
-                    : 'border-gray-200 hover:border-gray-300'
+                  'group relative overflow-hidden rounded-2xl border border-white/10 px-6 py-5 text-left transition-all duration-300',
+                  fileType === 'image'
+                    ? 'bg-gradient-to-r from-primary-500/80 to-primary-400/70 text-white shadow-[0_18px_35px_rgba(37,99,235,0.45)]'
+                    : 'bg-white/5 text-slate-200 hover:bg-white/8 hover:border-white/20'
                 ]"
               >
-                <div class="flex items-center">
-                  <div :class="[
-                    'flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center',
-                    fileType === 'image' ? 'bg-primary-100' : 'bg-gray-100'
-                  ]">
-                    <svg class="h-6 w-6" :class="fileType === 'image' ? 'text-primary-600' : 'text-gray-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                <div class="flex items-center gap-4">
+                  <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  <div class="ml-4">
-                    <h3 class="font-semibold" :class="fileType === 'image' ? 'text-primary-900' : 'text-gray-900'">图片</h3>
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG, BMP 等</p>
+                  <div>
+                    <p class="text-sm font-semibold tracking-wide uppercase">图片</p>
+                    <p class="mt-1 text-xs text-slate-300/70">JPG · PNG · BMP</p>
                   </div>
                 </div>
+                <span
+                  v-if="fileType === 'image'"
+                  class="absolute right-5 top-5 text-xs font-medium uppercase tracking-widest text-white/80"
+                >
+                  当前
+                </span>
               </button>
-              
+
               <button
                 @click="fileType = 'video'"
                 :class="[
-                  'px-6 py-4 rounded-lg border-2 transition-all text-left',
-                  fileType === 'video' 
-                    ? 'border-primary-600 bg-primary-50' 
-                    : 'border-gray-200 hover:border-gray-300'
+                  'group relative overflow-hidden rounded-2xl border border-white/10 px-6 py-5 text-left transition-all duration-300',
+                  fileType === 'video'
+                    ? 'bg-gradient-to-r from-accent-500/70 via-primary-500/70 to-primary-500/60 text-white shadow-[0_18px_35px_rgba(168,85,247,0.45)]'
+                    : 'bg-white/5 text-slate-200 hover:bg-white/8 hover:border-white/20'
                 ]"
               >
-                <div class="flex items-center">
-                  <div :class="[
-                    'flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center',
-                    fileType === 'video' ? 'bg-primary-100' : 'bg-gray-100'
-                  ]">
-                    <svg class="h-6 w-6" :class="fileType === 'video' ? 'text-primary-600' : 'text-gray-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                <div class="flex items-center gap-4">
+                  <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  <div class="ml-4">
-                    <h3 class="font-semibold" :class="fileType === 'video' ? 'text-primary-900' : 'text-gray-900'">视频</h3>
-                    <p class="text-xs text-gray-500 mt-1">MP4, AVI, MOV 等</p>
+                  <div>
+                    <p class="text-sm font-semibold tracking-wide uppercase">视频</p>
+                    <p class="mt-1 text-xs text-slate-300/70">MP4 · AVI · MOV</p>
                   </div>
                 </div>
+                <span
+                  v-if="fileType === 'video'"
+                  class="absolute right-5 top-5 text-xs font-medium uppercase tracking-widest text-white/80"
+                >
+                  当前
+                </span>
               </button>
             </div>
-            
-            <div 
+
+            <div
+              class="group relative mt-8 flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-white/15 bg-white/5 p-12 text-center transition-all duration-300 hover:border-primary-400/70 hover:bg-white/10"
               @click="fileInput?.click()"
-              class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-primary-500 transition-colors cursor-pointer bg-gray-50"
+              @dragover.prevent
+              @drop.prevent="handleFileDrop"
             >
-              <svg class="mx-auto h-16 w-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-              </svg>
-              <p class="mt-4 text-lg font-medium text-gray-700">点击选择{{ fileType === 'image' ? '图片' : '视频' }}文件</p>
-              <p class="mt-2 text-sm text-gray-500">或拖动文件到此处</p>
+              <input
+                ref="fileInput"
+                type="file"
+                class="hidden"
+                :accept="fileType === 'image' ? 'image/*' : 'video/*'"
+                @change="handleFileSelect"
+              />
+              <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-primary-200">
+                <svg
+                  v-if="fileType === 'image'"
+                  class="h-8 w-8"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7a4 4 0 014-4h10a4 4 0 014 4v10a4 4 0 01-4 4H7a4 4 0 01-4-4V7z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.5 11.5l2.25 2.25 3.75-3.75L19 14" />
+                </svg>
+                <svg
+                  v-else
+                  class="h-8 w-8"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6a2 2 0 012-2h8.382a2 2 0 011.414.586l3.618 3.618A2 2 0 0116.828 10H6a2 2 0 01-2-2V6z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16l4-3 4 3-4 3-4-3z" />
+                </svg>
+              </div>
+              <p class="mt-6 text-lg font-semibold text-white/90">
+                拖拽或点击上传 {{ fileType === 'image' ? '图片' : '视频' }} 文件
+              </p>
+              <p class="mt-2 text-sm text-slate-400/80">
+                支持单文件上传，最大 1GB。拖拽至此区域即可快速导入。
+              </p>
+              <span class="mt-4 text-xs text-slate-400/60">
+                小贴士：同名文件会覆盖上一版本，请提前备份。
+              </span>
             </div>
-            
-            <div v-if="selectedFile" class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center">
-                  <svg class="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+
+            <div
+              v-if="selectedFile"
+              class="mt-8 flex flex-col gap-4 rounded-2xl border border-primary-500/30 bg-primary-500/10 p-5 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div class="flex items-start gap-4">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500/25 text-white">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
                   </svg>
-                  <div class="ml-3">
-                    <p class="text-sm text-blue-900 font-medium">已选择文件</p>
-                    <p class="text-xs text-blue-700 mt-1">{{ selectedFile.name }}</p>
-                  </div>
                 </div>
-                <button @click="currentStep = 3" class="btn-primary text-sm">
-                  下一步 →
+                <div>
+                  <p class="text-sm font-semibold text-white/90 break-all">{{ selectedFile.name }}</p>
+                  <p class="mt-1 text-xs text-primary-100/80">
+                    {{ formatFileSize(selectedFile.size) }} · {{ fileType === 'image' ? '图像素材' : '视频素材' }}
+                  </p>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-3">
+                <button type="button" class="btn-secondary text-sm" @click.stop="fileInput?.click()">
+                  重新选择
+                </button>
+                <button type="button" class="btn-ghost text-sm" @click="clearSelectedFile">
+                  清除
+                </button>
+                <button type="button" class="btn-primary text-sm" @click="currentStep = 3">
+                  前往参数调优
                 </button>
               </div>
             </div>
+
+            <div v-else class="mt-6 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-slate-300/70">
+              <svg class="h-4 w-4 flex-shrink-0 text-slate-300/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>
+                暂未选择文件，请上传一份停车场图片或视频开启识别流程。
+              </span>
+            </div>
           </div>
-          
           <!-- 步骤3：调整参数 -->
-          <div v-if="currentStep === 3" class="card shadow-lg">
-            <h2 class="text-2xl font-bold text-gray-900 mb-2">调整参数</h2>
-            <p class="text-sm text-gray-500 mb-8">根据需要调整检测参数，优化识别结果</p>
-            
+          <div v-if="currentStep === 3" class="card">
+            <div class="relative mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p class="section-title">Step 03</p>
+                <h2 class="mt-3 text-2xl font-semibold text-white">智能调参</h2>
+                <p class="mt-2 text-sm text-slate-300/80">
+                  根据场景灵活调整检测参数，平衡识别精度与运行效率。数值实时作用于推理引擎。
+                </p>
+              </div>
+              <div class="flex flex-col items-start gap-2 text-xs text-slate-300/70 sm:items-end">
+                <span class="pill">实时生效</span>
+                <p>YOLOv8 · 高置信度筛选 · 多目标追踪</p>
+              </div>
+            </div>
+
             <div class="space-y-6">
-              <!-- 图片大小 -->
-              <div class="bg-gray-50 p-6 rounded-lg">
-                <label class="block text-sm font-semibold text-gray-800 mb-3">
-                  图片大小: <span class="text-primary-600">{{ detectionStore.detectionParams.imgSize }}px</span>
-                </label>
+              <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <div class="flex items-baseline justify-between">
+                  <h3 class="text-sm font-semibold text-white/90">输入尺寸</h3>
+                  <span class="text-lg font-semibold text-primary-200">{{ Number(detectionStore.detectionParams.imgSize) }} px</span>
+                </div>
+                <p class="mt-1 text-xs text-slate-400/80">尺寸越大检测越精细，但推理耗时越长。</p>
                 <input
                   v-model="detectionStore.detectionParams.imgSize"
                   type="range"
                   min="160"
                   max="1920"
                   step="32"
-                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  class="ui-range mt-5"
                 />
-                <div class="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>160px (超快)</span>
-                  <span>640px (平衡)</span>
-                  <span>1920px (高精度)</span>
+                <div class="mt-3 flex items-center justify-between text-[11px] uppercase tracking-widest text-slate-400/60">
+                  <span>160 · 极速</span>
+                  <span>640 · 均衡</span>
+                  <span>1920 · 极致</span>
                 </div>
-                <p class="text-xs text-gray-500 mt-2">
-                  💡 较大的尺寸可以检测更小的物体，但处理速度较慢
-                </p>
               </div>
 
-              <!-- 置信度阈值 -->
-              <div class="bg-gray-50 p-6 rounded-lg">
-                <label class="block text-sm font-semibold text-gray-800 mb-3">
-                  置信度阈值: <span class="text-primary-600">{{ detectionStore.detectionParams.confidence }}</span>
-                </label>
+              <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <div class="flex items-baseline justify-between">
+                  <h3 class="text-sm font-semibold text-white/90">置信度阈值</h3>
+                  <span class="text-lg font-semibold text-primary-200">{{ Number(detectionStore.detectionParams.confidence).toFixed(2) }}</span>
+                </div>
+                <p class="mt-1 text-xs text-slate-400/80">数值越高越严格，可显著降低误检。</p>
                 <input
                   v-model="detectionStore.detectionParams.confidence"
                   type="range"
                   min="0.01"
                   max="0.99"
                   step="0.01"
-                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  class="ui-range mt-5"
                 />
-                <div class="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>0.01 (宽松)</span>
-                  <span>0.50 (平衡)</span>
-                  <span>0.99 (严格)</span>
+                <div class="mt-3 flex items-center justify-between text-[11px] uppercase tracking-widest text-slate-400/60">
+                  <span>0.01 · 召回</span>
+                  <span>0.50 · 均衡</span>
+                  <span>0.99 · 精准</span>
                 </div>
-                <p class="text-xs text-gray-500 mt-2">
-                  💡 较高的阈值会减少误检，但可能漏检一些物体
-                </p>
               </div>
 
-              <!-- IOU阈值 -->
-              <div class="bg-gray-50 p-6 rounded-lg">
-                <label class="block text-sm font-semibold text-gray-800 mb-3">
-                  IOU阈值: <span class="text-primary-600">{{ detectionStore.detectionParams.iouThreshold }}</span>
-                </label>
+              <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <div class="flex items-baseline justify-between">
+                  <h3 class="text-sm font-semibold text-white/90">IOU 阈值</h3>
+                  <span class="text-lg font-semibold text-primary-200">{{ Number(detectionStore.detectionParams.iouThreshold).toFixed(2) }}</span>
+                </div>
+                <p class="mt-1 text-xs text-slate-400/80">控制候选框合并策略，优化重叠目标的识别体验。</p>
                 <input
                   v-model="detectionStore.detectionParams.iouThreshold"
                   type="range"
                   min="0.05"
                   max="0.95"
                   step="0.01"
-                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  class="ui-range mt-5"
                 />
-                <div class="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>0.05 (去除更多)</span>
-                  <span>0.60 (平衡)</span>
-                  <span>0.95 (保留更多)</span>
+                <div class="mt-3 flex items-center justify-between text-[11px] uppercase tracking-widest text-slate-400/60">
+                  <span>0.05 · 更少</span>
+                  <span>0.60 · 平衡</span>
+                  <span>0.95 · 更多</span>
                 </div>
-                <p class="text-xs text-gray-500 mt-2">
-                  💡 较高的阈值会保留更多重叠的检测框
-                </p>
               </div>
 
-              <!-- 最大检测数 -->
-              <div class="bg-gray-50 p-6 rounded-lg">
-                <label class="block text-sm font-semibold text-gray-800 mb-3">
-                  最大检测数: <span class="text-primary-600">{{ detectionStore.detectionParams.maxDetections }}</span>
-                </label>
+              <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <div class="flex items-baseline justify-between">
+                  <h3 class="text-sm font-semibold text-white/90">最大检测数量</h3>
+                  <span class="text-lg font-semibold text-primary-200">{{ Number(detectionStore.detectionParams.maxDetections) }}</span>
+                </div>
+                <p class="mt-1 text-xs text-slate-400/80">限制单张图像的目标上限，控制渲染开销。</p>
                 <input
                   v-model="detectionStore.detectionParams.maxDetections"
                   type="range"
                   min="10"
                   max="2000"
                   step="10"
-                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  class="ui-range mt-5"
                 />
-                <div class="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>10 (最少)</span>
-                  <span>300 (推荐)</span>
-                  <span>2000 (最多)</span>
+                <div class="mt-3 flex items-center justify-between text-[11px] uppercase tracking-widest text-slate-400/60">
+                  <span>10 · 精准</span>
+                  <span>300 · 推荐</span>
+                  <span>2000 · 全量</span>
                 </div>
-                <p class="text-xs text-gray-500 mt-2">
-                  💡 限制单张图片中检测的最大物体数量
-                </p>
               </div>
 
-              <!-- 视频帧间隔 (仅视频) -->
-              <div v-if="fileType === 'video'" class="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
-                <label class="block text-sm font-semibold text-gray-800 mb-3">
-                  视频帧间隔: <span class="text-primary-600">{{ detectionStore.detectionParams.frameSkip }}</span>
-                  <span class="ml-2 text-xs font-normal text-blue-600">(视频专用)</span>
-                </label>
+              <div
+                v-if="fileType === 'video'"
+                class="rounded-2xl border border-accent-500/25 bg-accent-500/10 p-6"
+              >
+                <div class="flex items-baseline justify-between">
+                  <h3 class="text-sm font-semibold text-white/90">视频抽帧间隔</h3>
+                  <span class="text-lg font-semibold text-accent-200">{{ detectionStore.detectionParams.frameSkip }}</span>
+                </div>
+                <p class="mt-1 text-xs text-accent-100/80">抽帧越大越节能，抽帧越小越平滑。</p>
                 <input
                   v-model="detectionStore.detectionParams.frameSkip"
                   type="range"
                   min="1"
                   max="10"
                   step="1"
-                  class="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                  class="ui-range mt-5 accent-accent-400"
                 />
-                <div class="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>1 (每帧)</span>
-                  <span>3</span>
-                  <span>5</span>
-                  <span>10 (最快)</span>
+                <div class="mt-3 flex items-center justify-between text-[11px] uppercase tracking-widest text-accent-100/70">
+                  <span>1 · 每帧</span>
+                  <span>5 · 均衡</span>
+                  <span>10 · 极速</span>
                 </div>
-                <p class="text-xs text-blue-700 mt-2">
-                  💡 <strong>1=最流畅</strong> (每帧检测，慢) | <strong>5=平衡</strong> | <strong>10=最快</strong> (跳帧多，可能跳跃)
-                </p>
               </div>
             </div>
-            
-            <!-- 开始识别按钮 -->
-            <div class="mt-8 flex justify-end space-x-3">
-              <button @click="currentStep = 2" class="btn-secondary">
-                ← 上一步
-              </button>
-              <button
-                @click="runDetection"
-                :disabled="!detectionStore.modelUploaded || !selectedFile || detectionStore.isProcessing"
-                class="btn-primary px-8"
-              >
-                {{ detectionStore.isProcessing ? '处理中...' : '开始识别 🚀' }}
-              </button>
+
+            <div class="mt-10 flex flex-col gap-4 border-t border-white/10 pt-6 text-sm text-slate-300/70 sm:flex-row sm:items-center sm:justify-between">
+              <p>参数会自动同步到历史记录，便于后续复现与对比。</p>
+              <div class="flex flex-wrap items-center gap-3">
+                <button type="button" class="btn-secondary text-sm" @click="currentStep = 2">返回素材选择</button>
+                <button
+                  type="button"
+                  class="btn-primary px-8 text-sm"
+                  :disabled="!detectionStore.modelUploaded || !selectedFile || detectionStore.isProcessing"
+                  @click="runDetection"
+                >
+                  {{ detectionStore.isProcessing ? '处理中…' : '开始识别 🚀' }}
+                </button>
+              </div>
             </div>
           </div>
-          
           <!-- 步骤4：识别结果 -->
           <div v-if="currentStep === 4">
-
-            <!-- 处理中状态 -->
-            <div v-if="detectionStore.isProcessing" class="card shadow-lg">
-            <div class="flex items-center justify-center py-32">
-              <div class="text-center">
+            <div v-if="detectionStore.isProcessing" class="card">
+              <div class="flex flex-col items-center justify-center gap-6 py-20 text-center">
                 <div class="relative">
-                  <div class="animate-spin rounded-full h-20 w-20 border-b-4 border-primary-600 mx-auto"></div>
+                  <div class="h-24 w-24 rounded-full border border-white/10 bg-white/5"></div>
                   <div class="absolute inset-0 flex items-center justify-center">
-                    <svg class="h-8 w-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    <div class="h-20 w-20 rounded-full border-2 border-primary-500/20"></div>
+                  </div>
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="h-16 w-16 animate-spin rounded-full border-b-4 border-primary-500"></div>
+                  </div>
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <svg class="h-7 w-7 text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </div>
                 </div>
-                <p class="mt-8 text-xl font-semibold text-gray-900">AI 正在分析中</p>
-                <p class="mt-2 text-sm text-gray-500">使用 YOLOv8 深度学习模型进行目标检测...</p>
-                <div class="mt-6 flex items-center justify-center space-x-1">
-                  <div class="w-2 h-2 bg-primary-600 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
-                  <div class="w-2 h-2 bg-primary-600 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
-                  <div class="w-2 h-2 bg-primary-600 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+                <div>
+                  <h3 class="text-xl font-semibold text-white">AI 正在分析素材</h3>
+                  <p class="mt-2 text-sm text-slate-300/75">使用 YOLOv8 模型推理，并应用预设的最优参数组合。</p>
+                </div>
+                <div class="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-slate-400/60">
+                  <span>多目标追踪</span>
+                  <span>智能降噪</span>
+                  <span>稳定运行</span>
                 </div>
               </div>
             </div>
-          </div>
 
-            <!-- 识别结果主展示区 -->
-            <div v-if="detectionStore.currentResult && !detectionStore.isProcessing" class="space-y-6">
-            <!-- 标题 -->
-            <div class="flex items-center justify-between">
-              <div>
-                <h2 class="text-2xl font-bold text-gray-900">识别结果</h2>
-                <p class="text-sm text-gray-500 mt-1">检测完成，以下是详细结果</p>
-              </div>
-              <div class="flex items-center space-x-2">
-                <span class="px-3 py-1 bg-green-100 text-green-700 text-sm font-medium rounded-full flex items-center">
-                  <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  检测完成
-                </span>
-              </div>
-            </div>
-            
-            <!-- 统计卡片 -->
-            <div class="grid grid-cols-4 gap-4">
-              <div class="card text-center">
-                <div class="text-3xl font-bold text-primary-600">{{ detectionStore.currentResult.detections?.length || 0 }}</div>
-                <div class="text-sm text-gray-600 mt-1">检测物体</div>
-              </div>
-              <div class="card text-center">
-                <div class="text-3xl font-bold text-blue-600">{{ detectionStore.detectionParams.confidence }}</div>
-                <div class="text-sm text-gray-600 mt-1">置信度阈值</div>
-              </div>
-              <div class="card text-center">
-                <div class="text-3xl font-bold text-purple-600">{{ detectionStore.detectionParams.imgSize }}</div>
-                <div class="text-sm text-gray-600 mt-1">图片尺寸</div>
-              </div>
-              <div class="card text-center">
-                <div class="text-3xl font-bold text-green-600">{{ (detectionStore.currentResult.processTime || 0).toFixed(2) }}s</div>
-                <div class="text-sm text-gray-600 mt-1">处理时间</div>
-              </div>
-            </div>
-
-            <!-- 对比图片展示 -->
-            <div class="card shadow-lg">
-              <h3 class="text-lg font-semibold mb-4">对比展示</h3>
-              <div class="grid grid-cols-2 gap-6">
+            <div v-else-if="detectionStore.currentResult" class="space-y-8">
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-sm font-medium text-gray-700">原始文件</h4>
-                    <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">Original</span>
+                  <p class="section-title">Step 04</p>
+                  <h2 class="mt-3 text-3xl font-semibold text-white">识别完成</h2>
+                  <p class="mt-2 text-sm text-slate-300/80">以下是本次识别的核心指标与可视化结果。</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                  <span class="pill bg-emerald-500/20 text-emerald-200">检测完成</span>
+                  <span class="text-xs text-slate-300/70">耗时 {{ (detectionStore.currentResult.processTime || 0).toFixed(2) }}s</span>
+                </div>
+              </div>
+
+              <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="glass-panel p-5 text-center">
+                  <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">检测目标</p>
+                  <p class="mt-3 text-3xl font-semibold text-primary-200">{{ detectionStore.currentResult.detections?.length || 0 }}</p>
+                </div>
+                <div class="glass-panel p-5 text-center">
+                  <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">置信度</p>
+                  <p class="mt-3 text-3xl font-semibold text-primary-200">{{ Number(detectionStore.detectionParams.confidence).toFixed(2) }}</p>
+                </div>
+                <div class="glass-panel p-5 text-center">
+                  <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">输入尺寸</p>
+                  <p class="mt-3 text-3xl font-semibold text-primary-200">{{ Number(detectionStore.detectionParams.imgSize) }}</p>
+                </div>
+                <div class="glass-panel p-5 text-center">
+                  <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">推理耗时</p>
+                  <p class="mt-3 text-3xl font-semibold text-primary-200">{{ (detectionStore.currentResult.processTime || 0).toFixed(2) }}s</p>
+                </div>
+              </div>
+
+              <div class="grid gap-6 lg:grid-cols-2">
+                <div class="glass-panel group overflow-hidden p-5">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-white/90">原始素材</h3>
+                    <button type="button" class="btn-ghost text-xs" @click="openPreview('original')">放大查看</button>
                   </div>
-                  <div class="relative group cursor-pointer" @click="openPreview('original')">
-                    <img 
-                      v-if="fileType === 'image'" 
-                      :src="detectionStore.currentResult.originalUrl" 
+                  <div class="relative mt-4 overflow-hidden rounded-2xl border border-white/10">
+                    <img
+                      v-if="fileType === 'image'"
+                      :src="detectionStore.currentResult.originalUrl"
                       @error="handleImageError($event, '原始图片')"
-                      class="w-full rounded-lg border" 
-                      alt="原始图片"
+                      class="w-full object-cover"
+                      alt="原始素材预览"
                     />
-                    <video v-else :src="detectionStore.currentResult.originalUrl" controls class="w-full rounded-lg border"></video>
-                    <div v-if="fileType === 'image'" class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all rounded-lg flex items-center justify-center">
-                      <span class="text-white opacity-0 group-hover:opacity-100 text-sm font-medium">点击预览</span>
-                    </div>
+                    <video
+                      v-else
+                      :src="detectionStore.currentResult.originalUrl"
+                      controls
+                      class="w-full rounded-2xl"
+                    ></video>
+                    <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                   </div>
                 </div>
-                <div>
-                  <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-sm font-medium text-gray-700">识别结果</h4>
-                    <span class="px-2 py-1 text-xs font-medium bg-primary-100 text-primary-700 rounded">Detected</span>
+                <div class="glass-panel group overflow-hidden p-5">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-white/90">识别结果</h3>
+                    <button type="button" class="btn-ghost text-xs" @click="openPreview('result')">放大查看</button>
                   </div>
-                  <div class="relative group cursor-pointer" @click="openPreview('result')">
-                    <img 
-                      v-if="fileType === 'image'" 
-                      :src="detectionStore.currentResult.resultUrl" 
+                  <div class="relative mt-4 overflow-hidden rounded-2xl border border-white/10">
+                    <img
+                      v-if="fileType === 'image'"
+                      :src="detectionStore.currentResult.resultUrl"
                       @error="handleImageError($event, '结果图片')"
-                      class="w-full rounded-lg border" 
-                      alt="识别结果"
+                      class="w-full object-cover"
+                      alt="识别结果预览"
                     />
-                    <video v-else :src="detectionStore.currentResult.resultUrl" controls class="w-full rounded-lg border"></video>
-                    <div v-if="fileType === 'image'" class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all rounded-lg flex items-center justify-center">
-                      <span class="text-white opacity-0 group-hover:opacity-100 text-sm font-medium">点击预览</span>
-                    </div>
+                    <video
+                      v-else
+                      :src="detectionStore.currentResult.resultUrl"
+                      controls
+                      class="w-full rounded-2xl"
+                    ></video>
+                    <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                   </div>
                 </div>
-              </div>
-              <!-- 操作按钮 -->
-              <div v-if="fileType === 'image'" class="flex justify-center space-x-3 pt-4 border-t">
-                <button
-                  @click="openPreview('original')"
-                  class="btn-secondary"
-                >
-                  <svg class="h-4 w-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                  </svg>
-                  查看原图
-                </button>
-                <button
-                  @click="openPreview('result')"
-                  class="btn-secondary"
-                >
-                  <svg class="h-4 w-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                  </svg>
-                  查看结果
-                </button>
-                <button
-                  @click="openPreview('both')"
-                  class="btn-primary"
-                >
-                  <svg class="h-4 w-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5z"></path>
-                  </svg>
-                  对比预览
-                </button>
               </div>
 
-              <!-- 重新开始按钮 -->
-              <div class="flex justify-center pt-6 border-t mt-6">
-                <button
-                  @click="resetAllStates"
-                  class="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105 flex items-center space-x-2"
-                >
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                  </svg>
-                  <span>重新开始</span>
-                </button>
+              <div class="glass-panel p-6">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div class="space-y-2 text-sm text-slate-300/80">
+                    <p>素材名称：{{ selectedFile?.name || detectionStore.currentResult.fileName || '未命名素材' }}</p>
+                    <p>置信度阈值：{{ Number(detectionStore.detectionParams.confidence).toFixed(2) }} · IOU：{{ Number(detectionStore.detectionParams.iouThreshold).toFixed(2) }}</p>
+                    <p v-if="fileType === 'video'">视频抽帧：每 {{ detectionStore.detectionParams.frameSkip }} 帧分析一次</p>
+                    <p v-else>图像尺寸：{{ detectionStore.detectionParams.imgSize }} 像素</p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <button type="button" class="btn-secondary text-sm" @click="openPreview('both')">对比预览</button>
+                    <router-link to="/history" class="btn-ghost text-sm">查看历史记录</router-link>
+                    <button type="button" class="btn-primary text-sm" @click="resetAllStates">重新开始</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="card text-center">
+              <div class="py-16">
+                <svg class="mx-auto h-16 w-16 text-slate-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h3 class="mt-6 text-lg font-semibold text-white">尚未开始识别</h3>
+                <p class="mt-2 text-sm text-slate-300/75">请完成前面三个步骤后，点击“开始识别”按钮。</p>
+                <button type="button" class="btn-primary mt-6" @click="currentStep = 1">回到第一步</button>
               </div>
             </div>
           </div>
-          
-          <!-- 无结果提示 -->
-          <div v-if="!detectionStore.currentResult && !detectionStore.isProcessing" class="card shadow-lg">
-            <div class="text-center py-20">
-              <svg class="mx-auto h-20 w-20 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-              </svg>
-              <h3 class="mt-4 text-lg font-medium text-gray-900">暂无识别结果</h3>
-              <p class="mt-2 text-sm text-gray-500">请先完成前面的步骤并点击“开始识别”按钮</p>
-              <button @click="currentStep = 1" class="mt-6 btn-primary">返回第一步</button>
-            </div>
-          </div>
-          </div>
-          <!-- 结束步骤4 -->
-          
+
         </div>
       </div>
     </div>
@@ -660,68 +722,70 @@
     <!-- 图片预览模态框 -->
     <div
       v-if="showPreview && detectionStore.currentResult"
-      class="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center"
+      class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl"
       @click="closePreview"
     >
-      <div class="absolute top-4 right-4 flex items-center space-x-4 z-10">
-        <!-- 缩放控制 -->
-        <div class="flex items-center space-x-2 bg-white bg-opacity-10 rounded-lg px-3 py-2">
+      <div class="absolute top-6 right-8 z-[80] flex items-center gap-4">
+        <div class="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-2 shadow-[0_12px_35px_rgba(8,15,40,0.45)] backdrop-blur">
           <button
             @click.stop="zoomOut"
-            class="text-white hover:text-gray-300 transition-colors"
+            class="text-slate-200 transition-colors hover:text-white"
             title="缩小"
           >
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"></path>
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-5.197-5.197M4 10h7m0 0h7m-7 0V3m0 7v7" />
             </svg>
           </button>
-          <span class="text-white text-sm font-medium">{{ Math.round(scale * 100) }}%</span>
+          <span class="text-xs font-semibold tracking-[0.28em] text-slate-200 uppercase">{{ Math.round(scale * 100) }}%</span>
           <button
             @click.stop="zoomIn"
-            class="text-white hover:text-gray-300 transition-colors"
+            class="text-slate-200 transition-colors hover:text-white"
             title="放大"
           >
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 5v14m7-7H5" />
             </svg>
           </button>
           <button
             @click.stop="resetZoom"
-            class="text-white hover:text-gray-300 transition-colors ml-2"
-            title="重置"
+            class="ml-1 text-slate-200 transition-colors hover:text-white"
+            title="复位"
           >
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4V2m0 20v-2m8-8h2M2 12h2m15.071 6.071l1.414 1.414M4.515 4.515l1.414 1.414m0 12.727l-1.414 1.414M19.071 4.929l1.414-1.414" />
             </svg>
           </button>
         </div>
-        
-        <!-- 关闭按钮 -->
         <button
           @click="closePreview"
-          class="text-white hover:text-gray-300 transition-colors"
+          class="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-slate-200 transition hover:border-white/20 hover:text-white"
+          title="关闭"
         >
-          <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
 
       <div
-        class="w-full h-full flex items-center justify-center p-8"
-        :class="previewMode === 'both' ? 'grid grid-cols-2 gap-4' : ''"
+        :class="[
+          'relative h-[80vh] w-full max-w-6xl rounded-3xl border border-white/10 bg-white/5 px-8 py-10 shadow-[0_35px_120px_rgba(8,15,40,0.55)]',
+          previewMode === 'both' ? 'grid grid-cols-2 gap-6' : 'flex items-center justify-center'
+        ]"
         @click.stop
       >
-        <!-- 原始图片 -->
         <div
           v-if="previewMode === 'original' || previewMode === 'both'"
-          class="relative h-full flex flex-col items-center justify-center"
+          class="relative flex h-full flex-col items-center"
         >
-          <h3 class="text-white text-lg font-semibold mb-4">原始图片</h3>
+          <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70">
+            <span>原始素材</span>
+            <span>拖拽以平移 · 滚轮缩放</span>
+          </div>
           <div
             :class="[
-              'relative cursor-move w-full h-full flex items-center justify-center',
-              previewMode === 'both' ? 'overflow-hidden' : ''
+              'relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40',
+              previewMode === 'both' ? 'cursor-move' : 'cursor-move'
             ]"
             @mousedown="startDrag"
             @mousemove="onDrag"
@@ -730,29 +794,38 @@
             @wheel.prevent="onWheel"
           >
             <img
+              v-if="fileType === 'image'"
               :src="detectionStore.currentResult.originalUrl"
               :style="{
                 transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
                 transition: isDragging ? 'none' : 'transform 0.1s',
                 transformOrigin: 'center center'
               }"
-              class="max-w-full max-h-[80vh] object-contain select-none"
-              alt="原始图片"
+              class="max-h-full max-w-full select-none object-contain"
+              alt="原始素材"
               draggable="false"
             />
+            <video
+              v-else
+              :src="detectionStore.currentResult.originalUrl"
+              controls
+              class="max-h-full max-w-full rounded-2xl"
+            ></video>
           </div>
         </div>
 
-        <!-- 结果图片 -->
         <div
           v-if="previewMode === 'result' || previewMode === 'both'"
-          class="relative h-full flex flex-col items-center justify-center"
+          class="relative flex h-full flex-col items-center"
         >
-          <h3 class="text-white text-lg font-semibold mb-4">检测结果</h3>
+          <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70">
+            <span>识别结果</span>
+            <span>拖拽以平移 · 滚轮缩放</span>
+          </div>
           <div
             :class="[
-              'relative cursor-move w-full h-full flex items-center justify-center',
-              previewMode === 'both' ? 'overflow-hidden' : ''
+              'relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40',
+              previewMode === 'both' ? 'cursor-move' : 'cursor-move'
             ]"
             @mousedown="startDrag"
             @mousemove="onDrag"
@@ -761,21 +834,29 @@
             @wheel.prevent="onWheel"
           >
             <img
+              v-if="fileType === 'image'"
               :src="detectionStore.currentResult.resultUrl"
               :style="{
                 transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
                 transition: isDragging ? 'none' : 'transform 0.1s',
                 transformOrigin: 'center center'
               }"
-              class="max-w-full max-h-[80vh] object-contain select-none"
-              alt="检测结果"
+              class="max-h-full max-w-full select-none object-contain"
+              alt="识别结果"
               draggable="false"
             />
+            <video
+              v-else
+              :src="detectionStore.currentResult.resultUrl"
+              controls
+              class="max-h-full max-w-full rounded-2xl"
+            ></video>
           </div>
         </div>
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <script setup>
@@ -793,6 +874,22 @@ const selectedModelName = ref('')
 const isUploadingModel = ref(false)
 const uploadError = ref(null)
 let pendingModelFile = null
+
+const applySelectedFile = (file) => {
+  if (!file) return
+
+  const mime = file.type || ''
+  if (mime.startsWith('video')) {
+    fileType.value = 'video'
+  } else if (mime.startsWith('image')) {
+    fileType.value = 'image'
+  } else {
+    alert('暂不支持该文件类型，请选择图片或视频')
+    return
+  }
+
+  selectedFile.value = file
+}
 
 // 文件输入框的引用
 const modelInput = ref(null)
@@ -846,7 +943,39 @@ const retryUpload = async () => {
 }
 
 const handleFileSelect = (e) => {
-  selectedFile.value = e.target.files[0]
+  const file = e.target.files?.[0]
+  applySelectedFile(file)
+
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+const handleFileDrop = (event) => {
+  const file = event.dataTransfer?.files?.[0]
+  applySelectedFile(file)
+}
+
+const clearSelectedFile = () => {
+  selectedFile.value = null
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+const formatFileSize = (bytes) => {
+  if (bytes === undefined || bytes === null) return '0 B'
+  let size = Number(bytes)
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+
+  const fixed = unitIndex === 0 ? 0 : unitIndex === 1 ? 1 : 2
+  return `${size.toFixed(fixed)} ${units[unitIndex]}`
 }
 
 const runDetection = async () => {
@@ -929,7 +1058,7 @@ const resetAllStates = () => {
   // 确认对话框
   if (confirm('确定要重新开始吗？这将清空所有当前的识别数据和设置。')) {
     // 重置本地状态
-    selectedFile.value = null
+    clearSelectedFile()
     selectedModelName.value = ''
     isUploadingModel.value = false
     uploadError.value = null
@@ -940,10 +1069,6 @@ const resetAllStates = () => {
     if (modelInput.value) {
       modelInput.value.value = ''
     }
-    if (fileInput.value) {
-      fileInput.value.value = ''
-    }
-    
     // 重置store中的状态
     detectionStore.modelFile = null
     detectionStore.modelUploaded = false

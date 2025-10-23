@@ -1,19 +1,25 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
+  <div class="relative min-h-screen overflow-hidden bg-slate-950">
+    <div class="pointer-events-none absolute inset-0">
+      <div class="absolute -top-24 left-1/2 h-[360px] w-[360px] -translate-x-1/2 rounded-full bg-primary-500/25 blur-3xl"></div>
+      <div class="absolute top-1/2 -left-24 h-[420px] w-[420px] -translate-y-1/2 rounded-full bg-accent-500/20 blur-3xl"></div>
+      <div class="absolute bottom-[-160px] right-0 h-[420px] w-[420px] rounded-full bg-primary-900/25 blur-3xl"></div>
+    </div>
+    <div class="relative z-10 min-h-screen">
     <!-- 导航栏 -->
-    <nav class="bg-white shadow-sm">
+    <nav class="sticky top-0 z-20 border-b border-white/10 bg-white/5 backdrop-blur-xl">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16 items-center">
           <div class="flex items-center space-x-4">
-            <router-link to="/dashboard" class="text-gray-600 hover:text-gray-900">
+            <router-link to="/dashboard" class="text-slate-300/80 hover:text-white">
               <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
               </svg>
             </router-link>
-            <h1 class="text-xl font-bold text-gray-900">识别历史记录</h1>
+            <h1 class="text-xl font-bold text-white">识别历史记录</h1>
           </div>
           <div class="flex items-center space-x-4">
-            <div class="text-sm text-gray-600">{{ authStore.user?.email }}</div>
+            <div class="text-sm text-slate-300/80">{{ authStore.user?.email }}</div>
             <button @click="authStore.logout" class="btn-secondary text-sm">
               退出登录
             </button>
@@ -31,7 +37,7 @@
             <button
               v-if="!batchMode"
               @click="enterBatchMode"
-              class="text-sm text-primary-600 hover:text-primary-700 font-medium"
+              class="text-sm text-primary-200 hover:text-primary-100 font-medium"
             >
               批量管理
             </button>
@@ -43,19 +49,19 @@
                   @change="toggleSelectAll"
                   class="mr-2 h-4 w-4 text-primary-600 rounded"
                 />
-                <span class="text-sm text-gray-700">全选</span>
+                <span class="text-sm text-slate-200/90">全选</span>
               </label>
-              <span class="text-sm text-gray-600">已选中 {{ selectedIds.length }} 条</span>
+              <span class="text-sm text-slate-300/80">已选中 {{ selectedIds.length }} 条</span>
               <button
                 @click="exitBatchMode"
-                class="text-sm text-gray-600 hover:text-gray-800"
+                class="text-sm text-slate-300/80 hover:text-slate-200"
               >
                 取消
               </button>
               <button
                 v-if="selectedIds.length > 0"
                 @click="handleBatchDelete"
-                class="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                class="px-3 py-1 rounded-lg bg-red-500/80 px-3 py-1 text-sm text-white transition hover:bg-red-500"
               >
                 删除所选 ({{ selectedIds.length }})
               </button>
@@ -66,7 +72,7 @@
           </button>
         </div>
 
-        <div v-if="detectionStore.detectionHistory.length === 0" class="text-center py-12 text-gray-400">
+        <div v-if="detectionStore.detectionHistory.length === 0" class="text-center py-12 text-slate-500/70">
           <svg class="mx-auto h-24 w-24 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
@@ -78,8 +84,8 @@
             v-for="item in detectionStore.detectionHistory"
             :key="item.id"
             :class="[
-              'relative border rounded-lg overflow-hidden hover:shadow-lg transition-all',
-              selectedIds.includes(item.id) ? 'border-primary-500 border-2 shadow-lg' : 'border-gray-200'
+              'relative border border-white/10 rounded-2xl overflow-hidden transition-all duration-300 hover:border-primary-400/60 hover:shadow-[0_25px_60px_rgba(8,15,40,0.45)]',
+              selectedIds.includes(item.id) ? 'border-primary-500 border-2 shadow-lg' : 'border-white/10'
             ]"
           >
             <!-- 批量选择复选框 -->
@@ -96,7 +102,7 @@
             </div>
             
             <!-- 原始图片和结果图片对比 -->
-            <div class="grid grid-cols-2 gap-1 bg-gray-100 p-2">
+            <div class="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/5 p-2 backdrop-blur-sm">
               <!-- 原始图片 -->
               <div class="relative group cursor-pointer" @click="openPreview(item, 'original')">
                 <img
@@ -114,7 +120,7 @@
                   <span class="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">点击预览</span>
                 </div>
                 <div class="absolute bottom-1 left-1">
-                  <span class="px-2 py-0.5 text-xs font-medium rounded bg-gray-800 bg-opacity-70 text-white">
+                  <span class="px-2 py-0.5 text-xs font-medium rounded bg-slate-900/70 text-white">
                     原始
                   </span>
                 </div>
@@ -137,7 +143,7 @@
                   <span class="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">点击预览</span>
                 </div>
                 <div class="absolute bottom-1 left-1">
-                  <span class="px-2 py-0.5 text-xs font-medium rounded bg-blue-500 text-white">
+                  <span class="px-2 py-0.5 text-xs font-medium rounded bg-primary-500/100 text-white">
                     结果
                   </span>
                 </div>
@@ -146,7 +152,7 @@
 
             <div class="absolute top-4 right-4 z-10">
               <span
-                :class="['px-2 py-1 text-xs font-medium rounded shadow-lg', item.file_type === 'image' ? 'bg-blue-500 text-white' : 'bg-purple-500 text-white']"
+                :class="['px-2 py-1 text-xs font-medium rounded shadow-lg', item.file_type === 'image' ? 'bg-primary-500/100 text-white' : 'bg-accent-500 text-white']"
               >
                 {{ item.file_type === 'image' ? '图片' : '视频' }}
               </span>
@@ -155,16 +161,16 @@
             <div class="p-4">
               <div class="flex justify-between items-start mb-3">
                 <div>
-                  <p class="text-sm font-medium text-gray-900">
+                  <p class="text-sm font-medium text-white">
                     检测到 {{ item.detections?.length || 0 }} 个物体
                   </p>
-                  <p class="text-xs text-gray-500 mt-1">
+                  <p class="text-xs text-slate-400/80 mt-1">
                     {{ formatDate(item.created_at) }}
                   </p>
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
+              <div class="grid grid-cols-2 gap-2 text-xs text-slate-300/80 mb-3">
                 <div>
                   <span class="font-medium">置信度:</span> {{ item.params?.confidence || 'N/A' }}
                 </div>
@@ -196,69 +202,68 @@
     <!-- 图片预览模态框 -->
     <div
       v-if="previewItem"
-      class="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center"
+      class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl"
       @click="closePreview"
     >
-      <div class="absolute top-4 right-4 flex items-center space-x-4 z-10">
-        <!-- 缩放控制 -->
-        <div class="flex items-center space-x-2 bg-white bg-opacity-10 rounded-lg px-3 py-2">
+      <div class="absolute top-6 right-8 z-[80] flex items-center gap-4">
+        <div class="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-2 shadow-[0_12px_35px_rgba(8,15,40,0.45)] backdrop-blur">
           <button
             @click.stop="zoomOut"
-            class="text-white hover:text-gray-300 transition-colors"
+            class="text-slate-200 transition hover:text-white"
             title="缩小"
           >
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"></path>
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-5.197-5.197M4 10h7m0 0h7m-7 0V3m0 7v7" />
             </svg>
           </button>
-          <span class="text-white text-sm font-medium">{{ Math.round(scale * 100) }}%</span>
+          <span class="text-xs font-semibold tracking-[0.28em] text-slate-200 uppercase">{{ Math.round(scale * 100) }}%</span>
           <button
             @click.stop="zoomIn"
-            class="text-white hover:text-gray-300 transition-colors"
+            class="text-slate-200 transition hover:text-white"
             title="放大"
           >
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 5v14m7-7H5" />
             </svg>
           </button>
           <button
             @click.stop="resetZoom"
-            class="text-white hover:text-gray-300 transition-colors ml-2"
-            title="重置"
+            class="ml-1 text-slate-200 transition hover:text-white"
+            title="复位"
           >
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4V2m0 20v-2m8-8h2M2 12h2m15.071 6.071l1.414 1.414M4.515 4.515l1.414 1.414m0 12.727l-1.414 1.414M19.071 4.929l1.414-1.414" />
             </svg>
           </button>
         </div>
-        
-        <!-- 关闭按钮 -->
         <button
           @click="closePreview"
-          class="text-white hover:text-gray-300 transition-colors"
+          class="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-slate-200 transition hover:border-white/20 hover:text-white"
+          title="关闭"
         >
-          <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
 
       <div
-        class="w-full h-full flex items-center justify-center p-8"
-        :class="previewMode === 'both' ? 'grid grid-cols-2 gap-4' : ''"
+        :class="[
+          'relative h-[80vh] w-full max-w-6xl rounded-3xl border border-white/10 bg-white/5 px-8 py-10 shadow-[0_35px_120px_rgba(8,15,40,0.55)]',
+          previewMode === 'both' ? 'grid grid-cols-2 gap-6' : 'flex items-center justify-center'
+        ]"
         @click.stop
       >
-        <!-- 原始图片 -->
         <div
           v-if="previewMode === 'original' || previewMode === 'both'"
-          class="relative h-full flex flex-col items-center justify-center"
+          class="relative flex h-full flex-col items-center"
         >
-          <h3 class="text-white text-lg font-semibold mb-4">原始图片</h3>
+          <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70">
+            <span>原始素材</span>
+            <span>拖拽平移 · 滚轮缩放</span>
+          </div>
           <div
-            :class="[
-              'relative cursor-move w-full h-full flex items-center justify-center',
-              previewMode === 'both' ? 'overflow-hidden' : ''
-            ]"
+            class="relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40 cursor-move"
             @mousedown="startDrag"
             @mousemove="onDrag"
             @mouseup="endDrag"
@@ -266,30 +271,36 @@
             @wheel.prevent="onWheel"
           >
             <img
+              v-if="previewItem.file_type === 'image'"
               :src="previewItem.original_file"
               :style="{
                 transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
                 transition: isDragging ? 'none' : 'transform 0.1s',
                 transformOrigin: 'center center'
               }"
-              class="max-w-full max-h-[80vh] object-contain select-none"
-              alt="原始图片"
+              class="max-h-full max-w-full select-none object-contain"
+              alt="原始素材"
               draggable="false"
             />
+            <video
+              v-else
+              :src="previewItem.original_file"
+              controls
+              class="max-h-full max-w-full rounded-2xl"
+            ></video>
           </div>
         </div>
 
-        <!-- 结果图片 -->
         <div
           v-if="previewMode === 'result' || previewMode === 'both'"
-          class="relative h-full flex flex-col items-center justify-center"
+          class="relative flex h-full flex-col items-center"
         >
-          <h3 class="text-white text-lg font-semibold mb-4">检测结果</h3>
+          <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70">
+            <span>识别结果</span>
+            <span>拖拽平移 · 滚轮缩放</span>
+          </div>
           <div
-            :class="[
-              'relative cursor-move w-full h-full flex items-center justify-center',
-              previewMode === 'both' ? 'overflow-hidden' : ''
-            ]"
+            class="relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40 cursor-move"
             @mousedown="startDrag"
             @mousemove="onDrag"
             @mouseup="endDrag"
@@ -297,20 +308,29 @@
             @wheel.prevent="onWheel"
           >
             <img
+              v-if="previewItem.file_type === 'image'"
               :src="previewItem.result_file"
               :style="{
                 transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
                 transition: isDragging ? 'none' : 'transform 0.1s',
                 transformOrigin: 'center center'
               }"
-              class="max-w-full max-h-[80vh] object-contain select-none"
-              alt="检测结果"
+              class="max-h-full max-w-full select-none object-contain"
+              alt="识别结果"
               draggable="false"
             />
+            <video
+              v-else
+              :src="previewItem.result_file"
+              controls
+              class="max-h-full max-w-full rounded-2xl"
+            ></video>
           </div>
         </div>
       </div>
     </div>
+  </div>
+
   </div>
 </template>
 
