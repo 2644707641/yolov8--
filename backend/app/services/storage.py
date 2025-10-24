@@ -42,17 +42,14 @@ def upload_file_to_supabase(
         supabase_client.storage.from_(bucket).upload(
             path=storage_path,
             file=file_content,
-            file_options={"content-type": content_type, "upsert": False},
+            file_options={"content-type": content_type},
         )
 
-        public_url_response = supabase_client.storage.from_(bucket).get_public_url(
-            storage_path
-        )
-        url = getattr(public_url_response, "public_url", None)
-        if not url:
-            logger.warning("未获取到公共 URL，返回原始响应")
-            return public_url_response
-        return url
+        public_url = supabase_client.storage.from_(bucket).get_public_url(storage_path)
+        if not public_url:
+            logger.warning("未获取到公共 URL")
+            return None
+        return public_url
     except Exception as exc:
         logger.warning("上传至 Supabase 失败: %s", exc)
         return None

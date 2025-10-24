@@ -6,7 +6,12 @@ from typing import Optional
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[3]
+BACKEND_DIR = BASE_DIR / "backend"
+
+# Load root and backend .env files so Supabase credentials are available
+load_dotenv(BASE_DIR / ".env", override=False)
+load_dotenv(BACKEND_DIR / ".env", override=False)
 
 
 @dataclass
