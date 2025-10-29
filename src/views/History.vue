@@ -31,9 +31,46 @@
     <!-- 历史记录列表 -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="card">
+        <!-- 分类筛选标签 -->
+        <div class="mb-6 flex items-center gap-3">
+          <button
+            @click="setFilterType('all')"
+            :class="[
+              'rounded-xl px-4 py-2 text-sm font-medium transition-all',
+              filterType === 'all'
+                ? 'bg-gradient-to-r from-primary-500 to-primary-400 text-white shadow-lg'
+                : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+            ]"
+          >
+            全部 ({{ detectionStore.detectionHistory.length }})
+          </button>
+          <button
+            @click="setFilterType('image')"
+            :class="[
+              'rounded-xl px-4 py-2 text-sm font-medium transition-all',
+              filterType === 'image'
+                ? 'bg-gradient-to-r from-primary-500 to-primary-400 text-white shadow-lg'
+                : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+            ]"
+          >
+            图片 ({{ detectionStore.detectionHistory.filter(h => h.file_type === 'image').length }})
+          </button>
+          <button
+            @click="setFilterType('video')"
+            :class="[
+              'rounded-xl px-4 py-2 text-sm font-medium transition-all',
+              filterType === 'video'
+                ? 'bg-gradient-to-r from-accent-500 to-primary-500 text-white shadow-lg'
+                : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+            ]"
+          >
+            视频 ({{ detectionStore.detectionHistory.filter(h => h.file_type === 'video').length }})
+          </button>
+        </div>
+
         <div class="flex justify-between items-center mb-6">
           <div class="flex items-center space-x-4">
-            <h2 class="text-lg font-semibold">全部记录 ({{ detectionStore.detectionHistory.length }})</h2>
+            <h2 class="text-lg font-semibold">当前显示 {{ paginatedHistory.length }} 条 / 共 {{ filteredHistory.length }} 条</h2>
             <button
               v-if="!batchMode"
               @click="enterBatchMode"
@@ -72,22 +109,23 @@
           </button>
         </div>
 
-        <div v-if="detectionStore.detectionHistory.length === 0" class="text-center py-12 text-slate-500/70">
+        <div v-if="filteredHistory.length === 0" class="text-center py-12 text-slate-500/70">
           <svg class="mx-auto h-24 w-24 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
-          <p>暂无识别记录</p>
+          <p>{{ filterType === 'all' ? '暂无识别记录' : `暂无${filterType === 'image' ? '图片' : '视频'}记录` }}</p>
         </div>
 
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div
-            v-for="item in detectionStore.detectionHistory"
-            :key="item.id"
-            :class="[
-              'relative border border-white/10 rounded-2xl overflow-hidden transition-all duration-300 hover:border-primary-400/60 hover:shadow-[0_25px_60px_rgba(8,15,40,0.45)]',
-              selectedIds.includes(item.id) ? 'border-primary-500 border-2 shadow-lg' : 'border-white/10'
-            ]"
-          >
+        <div v-else class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div
+              v-for="item in paginatedHistory"
+              :key="item.id"
+              :class="[
+                'relative border border-white/10 rounded-2xl overflow-hidden transition-all duration-300 hover:border-primary-400/60 hover:shadow-[0_25px_60px_rgba(8,15,40,0.45)]',
+                selectedIds.includes(item.id) ? 'border-primary-500 border-2 shadow-lg' : 'border-white/10'
+              ]"
+            >
             <!-- 批量选择复选框 -->
             <div v-if="batchMode" class="absolute top-2 left-2 z-20">
               <label class="flex items-center cursor-pointer">
@@ -195,6 +233,109 @@
               </div>
             </div>
           </div>
+
+          <!-- 分页控件 -->
+          <div v-if="totalPages > 1" class="mt-8 flex items-center justify-center gap-2">
+            <!-- 上一页按钮 -->
+            <button
+              @click="goToPage(currentPage - 1)"
+              :disabled="currentPage === 1"
+              :class="[
+                'flex h-10 w-10 items-center justify-center rounded-xl border transition-all',
+                currentPage === 1
+                  ? 'cursor-not-allowed border-white/5 bg-white/5 text-slate-500'
+                  : 'border-white/10 bg-white/5 text-slate-300 hover:border-primary-400/50 hover:bg-primary-500/10 hover:text-primary-300'
+              ]"
+              title="上一页"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            <!-- 页码按钮 -->
+            <template v-for="page in totalPages" :key="page">
+              <!-- 始终显示第一页 -->
+              <button
+                v-if="page === 1"
+                @click="goToPage(page)"
+                :class="[
+                  'flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-all',
+                  currentPage === page
+                    ? 'border-primary-400/50 bg-gradient-to-r from-primary-500 to-primary-400 text-white shadow-lg'
+                    : 'border-white/10 bg-white/5 text-slate-300 hover:border-primary-400/50 hover:bg-primary-500/10 hover:text-primary-300'
+                ]"
+              >
+                {{ page }}
+              </button>
+
+              <!-- 省略号（前） -->
+              <span
+                v-else-if="page === 2 && currentPage > 4"
+                class="flex h-10 w-10 items-center justify-center text-slate-400"
+              >
+                ...
+              </span>
+
+              <!-- 当前页附近的页码 -->
+              <button
+                v-else-if="page > 1 && page < totalPages && Math.abs(page - currentPage) <= 2"
+                @click="goToPage(page)"
+                :class="[
+                  'flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-all',
+                  currentPage === page
+                    ? 'border-primary-400/50 bg-gradient-to-r from-primary-500 to-primary-400 text-white shadow-lg'
+                    : 'border-white/10 bg-white/5 text-slate-300 hover:border-primary-400/50 hover:bg-primary-500/10 hover:text-primary-300'
+                ]"
+              >
+                {{ page }}
+              </button>
+
+              <!-- 省略号（后） -->
+              <span
+                v-else-if="page === totalPages - 1 && currentPage < totalPages - 3"
+                class="flex h-10 w-10 items-center justify-center text-slate-400"
+              >
+                ...
+              </span>
+
+              <!-- 始终显示最后一页 -->
+              <button
+                v-else-if="page === totalPages"
+                @click="goToPage(page)"
+                :class="[
+                  'flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-all',
+                  currentPage === page
+                    ? 'border-primary-400/50 bg-gradient-to-r from-primary-500 to-primary-400 text-white shadow-lg'
+                    : 'border-white/10 bg-white/5 text-slate-300 hover:border-primary-400/50 hover:bg-primary-500/10 hover:text-primary-300'
+                ]"
+              >
+                {{ page }}
+              </button>
+            </template>
+
+            <!-- 下一页按钮 -->
+            <button
+              @click="goToPage(currentPage + 1)"
+              :disabled="currentPage === totalPages"
+              :class="[
+                'flex h-10 w-10 items-center justify-center rounded-xl border transition-all',
+                currentPage === totalPages
+                  ? 'cursor-not-allowed border-white/5 bg-white/5 text-slate-500'
+                  : 'border-white/10 bg-white/5 text-slate-300 hover:border-primary-400/50 hover:bg-primary-500/10 hover:text-primary-300'
+              ]"
+              title="下一页"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            <!-- 页码信息 -->
+            <div class="ml-4 text-sm text-slate-400">
+              第 {{ currentPage }} / {{ totalPages }} 页
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -236,6 +377,40 @@
             </svg>
           </button>
         </div>
+        
+        <!-- 视频控制按钮组 -->
+        <div v-if="previewItem?.file_type === 'video' && previewMode === 'both'" class="flex items-center gap-2">
+          <!-- 同步播放/暂停按钮 -->
+          <button
+            @click.stop="toggleVideoPlayback"
+            class="flex h-10 items-center gap-2 rounded-full border px-4 transition-all"
+            :class="isVideoPlaying 
+              ? 'border-red-400/30 bg-red-500/20 text-red-300 hover:border-red-400/50 hover:bg-red-500/30' 
+              : 'border-primary-400/30 bg-primary-500/20 text-primary-300 hover:border-primary-400/50 hover:bg-primary-500/30'"
+            :title="isVideoPlaying ? '暂停播放' : '同步播放'"
+          >
+            <svg v-if="!isVideoPlaying" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <svg v-else class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+            </svg>
+            <span class="text-sm font-medium">{{ isVideoPlaying ? '暂停' : '同步播放' }}</span>
+          </button>
+          
+          <!-- 回到原点按钮 -->
+          <button
+            @click.stop="resetVideos"
+            class="flex h-10 items-center gap-2 rounded-full border border-slate-400/30 bg-slate-500/20 px-4 text-slate-300 transition-all hover:border-slate-400/50 hover:bg-slate-500/30"
+            title="重置到开始位置"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+            <span class="text-sm font-medium">回到原点</span>
+          </button>
+        </div>
+        
         <button
           @click="closePreview"
           class="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-slate-200 transition hover:border-white/20 hover:text-white"
@@ -260,15 +435,19 @@
         >
           <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70">
             <span>原始素材</span>
-            <span>拖拽平移 · 滚轮缩放</span>
+            <span v-if="previewItem.file_type === 'image'">拖拽平移 · 滚轮缩放</span>
+            <span v-else>视频播放</span>
           </div>
           <div
-            class="relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40 cursor-move"
-            @mousedown="startDrag"
-            @mousemove="onDrag"
-            @mouseup="endDrag"
-            @mouseleave="endDrag"
-            @wheel.prevent="onWheel"
+            :class="[
+              'relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40',
+              previewItem.file_type === 'image' ? 'cursor-move' : ''
+            ]"
+            @mousedown="(e) => previewItem.file_type === 'image' && startDrag(e)"
+            @mousemove="(e) => previewItem.file_type === 'image' && onDrag(e)"
+            @mouseup="previewItem.file_type === 'image' && endDrag()"
+            @mouseleave="previewItem.file_type === 'image' && endDrag()"
+            @wheel.prevent="(e) => previewItem.file_type === 'image' && onWheel(e)"
           >
             <img
               v-if="previewItem.file_type === 'image'"
@@ -284,6 +463,7 @@
             />
             <video
               v-else
+              ref="originalVideoRef"
               :src="previewItem.original_file"
               controls
               class="max-h-full max-w-full rounded-2xl"
@@ -297,15 +477,19 @@
         >
           <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70">
             <span>识别结果</span>
-            <span>拖拽平移 · 滚轮缩放</span>
+            <span v-if="previewItem.file_type === 'image'">拖拽平移 · 滚轮缩放</span>
+            <span v-else>视频播放</span>
           </div>
           <div
-            class="relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40 cursor-move"
-            @mousedown="startDrag"
-            @mousemove="onDrag"
-            @mouseup="endDrag"
-            @mouseleave="endDrag"
-            @wheel.prevent="onWheel"
+            :class="[
+              'relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40',
+              previewItem.file_type === 'image' ? 'cursor-move' : ''
+            ]"
+            @mousedown="(e) => previewItem.file_type === 'image' && startDrag(e)"
+            @mousemove="(e) => previewItem.file_type === 'image' && onDrag(e)"
+            @mouseup="previewItem.file_type === 'image' && endDrag()"
+            @mouseleave="previewItem.file_type === 'image' && endDrag()"
+            @wheel.prevent="(e) => previewItem.file_type === 'image' && onWheel(e)"
           >
             <img
               v-if="previewItem.file_type === 'image'"
@@ -321,6 +505,7 @@
             />
             <video
               v-else
+              ref="resultVideoRef"
               :src="previewItem.result_file"
               controls
               class="max-h-full max-w-full rounded-2xl"
@@ -329,10 +514,16 @@
         </div>
       </div>
     </div>
-  </div>
-
+    </div>
+    </div>
   </div>
 </template>
+
+<script>
+export default {
+  name: 'History'
+}
+</script>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
@@ -350,9 +541,52 @@ const position = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
 
+// 视频同步播放相关
+const originalVideoRef = ref(null)
+const resultVideoRef = ref(null)
+const isVideoPlaying = ref(false)
+
 // 批量选择相关状态
 const batchMode = ref(false)
 const selectedIds = ref([])
+
+// 分页和筛选相关状态
+const currentPage = ref(1)
+const pageSize = 9
+const filterType = ref('all') // 'all', 'image', 'video'
+
+// 筛选后的历史记录
+const filteredHistory = computed(() => {
+  if (filterType.value === 'all') {
+    return detectionStore.detectionHistory
+  }
+  return detectionStore.detectionHistory.filter(item => item.file_type === filterType.value)
+})
+
+// 总页数
+const totalPages = computed(() => {
+  return Math.ceil(filteredHistory.value.length / pageSize)
+})
+
+// 当前页的数据
+const paginatedHistory = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  const end = start + pageSize
+  return filteredHistory.value.slice(start, end)
+})
+
+// 切换筛选类型
+const setFilterType = (type) => {
+  filterType.value = type
+  currentPage.value = 1 // 重置到第一页
+}
+
+// 切换页码
+const goToPage = (page) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page
+  }
+}
 
 const formatDate = (dateString) => {
   const date = new Date(dateString)
@@ -382,6 +616,75 @@ const openPreview = (item, mode) => {
 const closePreview = () => {
   previewItem.value = null
   resetZoom()
+  // 暂停所有视频
+  if (originalVideoRef.value) originalVideoRef.value.pause()
+  if (resultVideoRef.value) resultVideoRef.value.pause()
+  isVideoPlaying.value = false
+}
+
+// 视频同步播放/暂停
+const toggleVideoPlayback = () => {
+  if (!previewItem.value || previewItem.value.file_type !== 'video') return
+  
+  const videos = []
+  if (previewMode.value === 'both' || previewMode.value === 'original') {
+    if (originalVideoRef.value) videos.push(originalVideoRef.value)
+  }
+  if (previewMode.value === 'both' || previewMode.value === 'result') {
+    if (resultVideoRef.value) videos.push(resultVideoRef.value)
+  }
+  
+  if (videos.length === 0) return
+  
+  if (isVideoPlaying.value) {
+    // 暂停所有视频
+    videos.forEach(video => video.pause())
+    isVideoPlaying.value = false
+  } else {
+    // 智能同步播放
+    const allEnded = videos.every(video => video.ended)
+    
+    if (allEnded) {
+      // 所有视频都播放完了，从头开始
+      videos.forEach(video => {
+        video.currentTime = 0
+        video.play()
+      })
+    } else if (videos.length > 1) {
+      // 多个视频时，同步到第一个视频的位置
+      const syncTime = videos[0].currentTime
+      videos.forEach(video => {
+        video.currentTime = syncTime
+        video.play()
+      })
+    } else {
+      // 单个视频，直接播放
+      videos[0].play()
+    }
+    
+    isVideoPlaying.value = true
+  }
+}
+
+// 重置视频到开始位置（暂停状态）
+const resetVideos = () => {
+  if (!previewItem.value || previewItem.value.file_type !== 'video') return
+  
+  const videos = []
+  if (previewMode.value === 'both' || previewMode.value === 'original') {
+    if (originalVideoRef.value) videos.push(originalVideoRef.value)
+  }
+  if (previewMode.value === 'both' || previewMode.value === 'result') {
+    if (resultVideoRef.value) videos.push(resultVideoRef.value)
+  }
+  
+  // 重置所有视频到开始位置并暂停
+  videos.forEach(video => {
+    video.pause()
+    video.currentTime = 0
+  })
+  
+  isVideoPlaying.value = false
 }
 
 // 放大
@@ -429,10 +732,10 @@ const endDrag = () => {
   isDragging.value = false
 }
 
-// 批量选择相关计算属性
+// 批量选择相关计算属性（基于当前筛选结果）
 const isAllSelected = computed(() => {
-  return detectionStore.detectionHistory.length > 0 && 
-         selectedIds.value.length === detectionStore.detectionHistory.length
+  return filteredHistory.value.length > 0 && 
+         selectedIds.value.length === filteredHistory.value.length
 })
 
 // 进入批量模式
@@ -457,12 +760,12 @@ const toggleSelect = (id) => {
   }
 }
 
-// 全选/取消全选
+// 全选/取消全选（基于当前筛选结果）
 const toggleSelectAll = () => {
   if (isAllSelected.value) {
     selectedIds.value = []
   } else {
-    selectedIds.value = detectionStore.detectionHistory.map(item => item.id)
+    selectedIds.value = filteredHistory.value.map(item => item.id)
   }
 }
 

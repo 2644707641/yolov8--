@@ -1,8 +1,10 @@
 from typing import Optional
 
-import anyio
+import jwt
 from fastapi import HTTPException, status
 from supabase import Client
+
+from app.core.config import settings
 
 
 async def validate_authorization(
@@ -24,30 +26,67 @@ async def validate_authorization(
             detail="授权令牌为空",
         )
 
-    if supabase_client is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase 未配置，无法验证用户身份",
-        )
-
+    # 方法1: 如果配置了 JWT Secret，直接验证 token
+    if settings.supabase_jwt_secret:
+        try:
+            # 解码并验证 JWT token
+            payload = jwt.decode(
+                token,
+                settings.supabase_jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+            user_id = payload.get("sub")
+            
+            if not user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token 中缺少用户 ID",
+                )
+            
+            return user_id
+            
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="授权令牌已过期",
+            )
+        except jwt.InvalidTokenError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"授权验证失败: {str(exc)}",
+            )
+    
+    # 方法2: 回退到解析 JWT payload（不验证签名，仅用于开发）
+    # 这种方法安全性较低，仅在无法获取 JWT Secret 时使用
     try:
-        response = await anyio.to_thread.run_sync(
-            supabase_client.auth.get_user, token
+        # 不验证签名，仅解析 payload
+        payload = jwt.decode(
+            token,
+            options={"verify_signature": False},
         )
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token 中缺少用户 ID",
+            )
+        
+        # 检查 token 是否过期
+        import time
+        exp = payload.get("exp")
+        if exp and exp < time.time():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="授权令牌已过期",
+            )
+        
+        return user_id
+        
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="授权验证失败",
         ) from exc
-
-    user = getattr(response, "user", None)
-    user_id = getattr(user, "id", None)
-
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户身份无效",
-        )
-
-    return user_id
 

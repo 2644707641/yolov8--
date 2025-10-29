@@ -1,6 +1,10 @@
 <template>
   <div id="app" class="min-h-screen">
-    <router-view />
+    <router-view v-slot="{ Component, route }">
+      <keep-alive :include="['Dashboard', 'History']">
+        <component :is="Component" :key="route.path" />
+      </keep-alive>
+    </router-view>
   </div>
 </template>
 

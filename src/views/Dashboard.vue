@@ -22,6 +22,12 @@
               <span class="text-sm font-medium text-white">{{ authStore.user?.email }}</span>
             </div>
             <router-link
+              to="/model-weights"
+              class="btn-secondary text-sm"
+            >
+              权重管理
+            </router-link>
+            <router-link
               to="/history"
               class="btn-secondary text-sm"
             >
@@ -172,10 +178,13 @@
 
       <!-- 右侧主展示区域 -->
       <div class="flex-1 overflow-y-auto px-6 py-10 lg:px-12">
-        <div class="mx-auto w-full max-w-6xl space-y-10">
+        <div class="mx-auto w-full max-w-6xl">
           
-          <!-- 步骤1：上传模型权重 -->
-          <div v-if="currentStep === 1" class="card">
+          <!-- 步骤切换容器 -->
+          <div class="relative" style="min-height: 600px;">
+            <!-- 步骤1：上传模型权重 -->
+            <Transition :name="slideDirection" mode="out-in">
+              <div v-if="currentStep === 1" key="step-1" class="card absolute w-full">
             <div class="relative mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p class="section-title">Step 01</p>
@@ -284,9 +293,83 @@
                 </button>
               </div>
             </div>
-          </div>
-          <!-- 步骤2：上传文件 -->
-          <div v-if="currentStep === 2" class="card">
+
+            <!-- 已有权重列表 -->
+            <div v-if="availableWeights.length > 0" class="mt-8">
+              <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white">或选择已有权重</h3>
+                <button
+                  @click="loadUserWeights"
+                  :disabled="loadingWeights"
+                  class="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition-all hover:bg-white/10"
+                >
+                  <svg v-if="!loadingWeights" class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                  <div v-else class="h-3 w-3 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                  刷新
+                </button>
+              </div>
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <button
+                  v-for="weight in availableWeights"
+                  :key="weight.id"
+                  @click="selectExistingWeight(weight)"
+                  :class="[
+                    'group relative rounded-xl border p-4 text-left transition-all duration-300',
+                    selectedWeightId === weight.id
+                      ? 'border-primary-400/50 bg-gradient-to-r from-primary-500/20 to-primary-400/10 shadow-[0_0_20px_rgba(37,99,235,0.2)]'
+                      : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8'
+                  ]"
+                >
+                  <div class="flex items-start gap-3">
+                    <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-white/10">
+                      <svg class="h-5 w-5 text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                      </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <p class="truncate text-sm font-semibold text-white">{{ weight.name }}</p>
+                        <span
+                          v-if="selectedWeightId === weight.id"
+                          class="inline-flex items-center gap-1 rounded-full bg-primary-500/20 px-2 py-0.5 text-xs font-medium text-primary-300"
+                        >
+                          <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                          </svg>
+                          当前使用
+                        </span>
+                      </div>
+                      <p v-if="weight.description" class="mt-1 text-xs text-slate-400 truncate">{{ weight.description }}</p>
+                      <div class="mt-2 flex items-center gap-3 text-xs text-slate-500">
+                        <span>{{ formatFileSize(weight.file_size) }}</span>
+                        <span>{{ new Date(weight.created_at).toLocaleDateString('zh-CN') }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <div class="mt-4 text-center">
+                <router-link
+                  to="/model-weights"
+                  class="inline-flex items-center gap-2 text-sm text-primary-300 hover:text-primary-200"
+                >
+                  <span>查看全部权重</span>
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                </router-link>
+              </div>
+            </div>
+              </div>
+            </Transition>
+            
+            <!-- 步骤2：上传文件 -->
+            <Transition :name="slideDirection" mode="out-in">
+              <div v-if="currentStep === 2" key="step-2" class="card absolute w-full">
             <div class="relative mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p class="section-title">Step 02</p>
@@ -412,15 +495,39 @@
               class="mt-8 flex flex-col gap-4 rounded-2xl border border-primary-500/30 bg-primary-500/10 p-5 sm:flex-row sm:items-center sm:justify-between"
             >
               <div class="flex items-start gap-4">
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500/25 text-white">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500/25 text-white flex-shrink-0">
                   <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
                   </svg>
                 </div>
-                <div>
-                  <p class="text-sm font-semibold text-white/90 break-all">{{ selectedFile.name }}</p>
+                <div class="flex-1 min-w-0">
+                  <!-- 素材名称编辑 -->
+                  <div class="flex items-center gap-2">
+                    <input
+                      v-if="isEditingFileName"
+                      v-model="customFileName"
+                      @blur="isEditingFileName = false"
+                      @keyup.enter="isEditingFileName = false"
+                      class="flex-1 rounded-lg border border-primary-400/50 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/30"
+                      placeholder="输入素材名称"
+                      autofocus
+                    />
+                    <p v-else class="text-sm font-semibold text-white/90 break-all">
+                      {{ customFileName || selectedFile.name }}
+                    </p>
+                    <button
+                      v-if="!isEditingFileName"
+                      @click="isEditingFileName = true"
+                      class="flex-shrink-0 p-1.5 text-primary-200 transition hover:text-primary-100"
+                      title="编辑名称"
+                    >
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  </div>
                   <p class="mt-1 text-xs text-primary-100/80">
-                    {{ formatFileSize(selectedFile.size) }} · {{ fileType === 'image' ? '图像素材' : '视频素材' }}
+                    {{ formatFileSize(selectedFile.size) }} · {{ fileType === 'image' ? '图像素材' : '视频素材' }} · 原始：{{ selectedFile.name }}
                   </p>
                 </div>
               </div>
@@ -446,9 +553,12 @@
                 暂未选择文件，请上传一份停车场图片或视频开启识别流程。
               </span>
             </div>
-          </div>
-          <!-- 步骤3：调整参数 -->
-          <div v-if="currentStep === 3" class="card">
+              </div>
+            </Transition>
+            
+            <!-- 步骤3：调整参数 -->
+            <Transition :name="slideDirection" mode="out-in">
+              <div v-if="currentStep === 3" key="step-3" class="card absolute w-full">
             <div class="relative mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p class="section-title">Step 03</p>
@@ -587,9 +697,12 @@
                 </button>
               </div>
             </div>
-          </div>
-          <!-- 步骤4：识别结果 -->
-          <div v-if="currentStep === 4">
+              </div>
+            </Transition>
+            
+            <!-- 步骤4：识别结果 -->
+            <Transition :name="slideDirection" mode="out-in">
+              <div v-if="currentStep === 4" key="step-4" class="absolute w-full">
             <div v-if="detectionStore.isProcessing" class="card">
               <div class="flex flex-col items-center justify-center gap-6 py-20 text-center">
                 <div class="relative">
@@ -650,6 +763,21 @@
                 </div>
               </div>
 
+              <!-- 识别结果文字描述 -->
+              <div v-if="detectionStore.currentResult.description" class="glass-panel p-6">
+                <div class="flex items-start gap-4">
+                  <div class="flex-shrink-0 rounded-full bg-primary-500/20 p-3">
+                    <svg class="h-6 w-6 text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div class="flex-1">
+                    <h3 class="text-sm font-semibold text-white/90">识别结果概要</h3>
+                    <p class="mt-2 text-base leading-relaxed text-slate-300">{{ detectionStore.currentResult.description }}</p>
+                  </div>
+                </div>
+              </div>
+
               <div class="grid gap-6 lg:grid-cols-2">
                 <div class="glass-panel group overflow-hidden p-5">
                   <div class="flex items-center justify-between">
@@ -700,7 +828,7 @@
               <div class="glass-panel p-6">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div class="space-y-2 text-sm text-slate-300/80">
-                    <p>素材名称：{{ selectedFile?.name || detectionStore.currentResult.fileName || '未命名素材' }}</p>
+                    <p>素材名称：{{ customFileName || selectedFile?.name || detectionStore.currentResult.fileName || '未命名素材' }}</p>
                     <p>置信度阈值：{{ Number(detectionStore.detectionParams.confidence).toFixed(2) }} · IOU：{{ Number(detectionStore.detectionParams.iouThreshold).toFixed(2) }}</p>
                     <p v-if="fileType === 'video'">视频抽帧：每 {{ detectionStore.detectionParams.frameSkip }} 帧分析一次</p>
                     <p v-else>图像尺寸：{{ detectionStore.detectionParams.imgSize }} 像素</p>
@@ -724,7 +852,10 @@
                 <button type="button" class="btn-primary mt-6" @click="currentStep = 1">回到第一步</button>
               </div>
             </div>
+              </div>
+            </Transition>
           </div>
+          <!-- 结束步骤切换容器 -->
 
         </div>
       </div>
@@ -767,6 +898,40 @@
             </svg>
           </button>
         </div>
+        
+        <!-- 视频控制按钮组 -->
+        <div v-if="fileType === 'video' && previewMode === 'both'" class="flex items-center gap-2">
+          <!-- 同步播放/暂停按钮 -->
+          <button
+            @click.stop="toggleVideoPlayback"
+            class="flex h-10 items-center gap-2 rounded-full border px-4 transition-all"
+            :class="isVideoPlaying 
+              ? 'border-red-400/30 bg-red-500/20 text-red-300 hover:border-red-400/50 hover:bg-red-500/30' 
+              : 'border-primary-400/30 bg-primary-500/20 text-primary-300 hover:border-primary-400/50 hover:bg-primary-500/30'"
+            :title="isVideoPlaying ? '暂停播放' : '同步播放'"
+          >
+            <svg v-if="!isVideoPlaying" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <svg v-else class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+            </svg>
+            <span class="text-sm font-medium">{{ isVideoPlaying ? '暂停' : '同步播放' }}</span>
+          </button>
+          
+          <!-- 回到原点按钮 -->
+          <button
+            @click.stop="resetVideos"
+            class="flex h-10 items-center gap-2 rounded-full border border-slate-400/30 bg-slate-500/20 px-4 text-slate-300 transition-all hover:border-slate-400/50 hover:bg-slate-500/30"
+            title="重置到开始位置"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+            <span class="text-sm font-medium">回到原点</span>
+          </button>
+        </div>
+        
         <button
           @click="closePreview"
           class="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-slate-200 transition hover:border-white/20 hover:text-white"
@@ -780,8 +945,8 @@
 
       <div
         :class="[
-          'relative h-[88vh] w-full max-w-[96vw] rounded-3xl border border-white/10 bg-white/5 px-16 py-10 shadow-[0_35px_120px_rgba(8,15,40,0.55)]',
-          previewMode === 'both' ? 'grid grid-cols-2 gap-6' : 'flex items-center justify-center'
+          'relative h-[92vh] w-full max-w-[98vw] rounded-3xl border border-white/10 bg-white/5 px-6 py-6 shadow-[0_35px_120px_rgba(8,15,40,0.55)]',
+          previewMode === 'both' ? 'grid grid-cols-2 gap-8' : 'flex items-center justify-center'
         ]"
         @click.stop
       >
@@ -789,20 +954,21 @@
           v-if="previewMode === 'original' || previewMode === 'both'"
           class="relative flex h-full flex-col items-center"
         >
-          <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70">
+          <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70 mb-2">
             <span>原始素材</span>
-            <span>拖拽以平移 · 滚轮缩放</span>
+            <span v-if="fileType === 'image'">拖拽以平移 · 滚轮缩放</span>
+            <span v-else>视频播放</span>
           </div>
           <div
             :class="[
-              'relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40',
-              previewMode === 'both' ? 'cursor-move' : 'cursor-move'
+              'relative flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40 p-2',
+              fileType === 'image' ? 'cursor-move' : ''
             ]"
-            @mousedown="startDrag"
-            @mousemove="onDrag"
-            @mouseup="endDrag"
-            @mouseleave="endDrag"
-            @wheel.prevent="onWheel"
+            @mousedown="(e) => fileType === 'image' && startDrag(e)"
+            @mousemove="(e) => fileType === 'image' && onDrag(e)"
+            @mouseup="fileType === 'image' && endDrag()"
+            @mouseleave="fileType === 'image' && endDrag()"
+            @wheel.prevent="(e) => fileType === 'image' && onWheel(e)"
           >
             <img
               v-if="fileType === 'image'"
@@ -810,14 +976,17 @@
               :style="{
                 transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
                 transition: isDragging ? 'none' : 'transform 0.1s',
-                transformOrigin: 'center center'
+                transformOrigin: 'center center',
+                width: '100%',
+                height: '100%'
               }"
-              class="h-full w-full select-none object-cover"
+              class="select-none object-contain"
               alt="原始素材"
               draggable="false"
             />
             <video
               v-else
+              ref="originalVideoRef"
               :src="detectionStore.currentResult.originalUrl"
               controls
               class="max-h-full max-w-full rounded-2xl"
@@ -829,20 +998,21 @@
           v-if="previewMode === 'result' || previewMode === 'both'"
           class="relative flex h-full flex-col items-center"
         >
-          <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70">
+          <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70 mb-2">
             <span>识别结果</span>
-            <span>拖拽以平移 · 滚轮缩放</span>
+            <span v-if="fileType === 'image'">拖拽以平移 · 滚轮缩放</span>
+            <span v-else>视频播放</span>
           </div>
           <div
             :class="[
-              'relative mt-4 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40',
-              previewMode === 'both' ? 'cursor-move' : 'cursor-move'
+              'relative flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40 p-2',
+              fileType === 'image' ? 'cursor-move' : ''
             ]"
-            @mousedown="startDrag"
-            @mousemove="onDrag"
-            @mouseup="endDrag"
-            @mouseleave="endDrag"
-            @wheel.prevent="onWheel"
+            @mousedown="(e) => fileType === 'image' && startDrag(e)"
+            @mousemove="(e) => fileType === 'image' && onDrag(e)"
+            @mouseup="fileType === 'image' && endDrag()"
+            @mouseleave="fileType === 'image' && endDrag()"
+            @wheel.prevent="(e) => fileType === 'image' && onWheel(e)"
           >
             <img
               v-if="fileType === 'image'"
@@ -850,14 +1020,17 @@
               :style="{
                 transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
                 transition: isDragging ? 'none' : 'transform 0.1s',
-                transformOrigin: 'center center'
+                transformOrigin: 'center center',
+                width: '100%',
+                height: '100%'
               }"
-              class="h-full w-full select-none object-cover"
+              class="select-none object-contain"
               alt="识别结果"
               draggable="false"
             />
             <video
               v-else
+              ref="resultVideoRef"
               :src="detectionStore.currentResult.resultUrl"
               controls
               class="max-h-full max-w-full rounded-2xl"
@@ -866,25 +1039,133 @@
         </div>
       </div>
     </div>
+
+    <!-- 权重上传确认弹窗 -->
+    <div
+      v-if="showWeightDialog"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      @click.self="cancelUploadWeight"
+    >
+      <div class="relative w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-8 shadow-2xl">
+        <h3 class="text-xl font-semibold text-white">上传权重文件</h3>
+        <p class="mt-2 text-sm text-slate-300">
+          文件：<span class="font-medium text-primary-300">{{ selectedModelName }}</span>
+        </p>
+        
+        <div class="mt-6 space-y-4">
+          <div>
+            <label class="mb-2 block text-sm font-medium text-slate-300">
+              权重名称（可选）
+            </label>
+            <input
+              v-model="modelWeightName"
+              type="text"
+              placeholder="留空则使用文件名"
+              class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-400 transition-all focus:border-primary-400/50 focus:bg-white/8 focus:outline-none"
+            />
+            <p class="mt-1 text-xs text-slate-400">如果留空，将使用原文件名：{{ selectedModelName }}</p>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-medium text-slate-300">
+              权重描述（可选）
+            </label>
+            <input
+              v-model="modelWeightDescription"
+              type="text"
+              placeholder="例如：训练于2024年数据集，精度95%"
+              class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-400 transition-all focus:border-primary-400/50 focus:bg-white/8 focus:outline-none"
+            />
+          </div>
+        </div>
+        
+        <div class="mt-6 flex gap-3">
+          <button
+            @click="cancelUploadWeight"
+            class="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-white/10"
+          >
+            取消
+          </button>
+          <button
+            @click="confirmUploadWeight"
+            class="flex-1 rounded-xl bg-primary-500 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-primary-600"
+          >
+            确认上传
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 权重上传中弹窗 -->
+    <div
+      v-if="isUploadingModel"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
+      <div class="relative rounded-3xl border border-white/10 bg-slate-900 p-8 shadow-2xl">
+        <div class="flex flex-col items-center gap-4">
+          <div class="h-16 w-16 animate-spin rounded-full border-4 border-primary-500/20 border-t-primary-400"></div>
+          <div class="text-center">
+            <h3 class="text-xl font-semibold text-white">权重正在上传中</h3>
+            <p class="mt-2 text-sm text-slate-400">请稍等，正在上传到云端存储...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 权重选择加载弹窗 -->
+    <div
+      v-if="isSelectingWeight"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
+      <div class="relative rounded-3xl border border-white/10 bg-slate-900 p-8 shadow-2xl">
+        <div class="flex flex-col items-center gap-4">
+          <div class="h-16 w-16 animate-spin rounded-full border-4 border-primary-500/20 border-t-primary-400"></div>
+          <div class="text-center">
+            <h3 class="text-xl font-semibold text-white">正在加载权重</h3>
+            <p class="mt-2 text-sm text-slate-400">请稍等，正在准备模型...</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 </template>
 
+<script>
+export default {
+  name: 'Dashboard'
+}
+</script>
+
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useDetectionStore } from '../stores/detection'
+import { supabase } from '../config/supabase'
 
 const authStore = useAuthStore()
 const detectionStore = useDetectionStore()
 
 const currentStep = ref(1)
+const previousStep = ref(1)
+const slideDirection = ref('slide-left')
 const fileType = ref('image')
 const selectedFile = ref(null)
+const customFileName = ref('')
+const isEditingFileName = ref(false)
 const selectedModelName = ref('')
+const modelWeightName = ref('')
+const modelWeightDescription = ref('')
 const isUploadingModel = ref(false)
 const uploadError = ref(null)
 let pendingModelFile = null
+
+// 权重管理相关
+const availableWeights = ref([])
+const loadingWeights = ref(false)
+const selectedWeightId = ref(null)
+const isSelectingWeight = ref(false)
+const showWeightDialog = ref(false)
 
 const applySelectedFile = (file) => {
   if (!file) return
@@ -900,6 +1181,10 @@ const applySelectedFile = (file) => {
   }
 
   selectedFile.value = file
+  // 初始化自定义文件名（去除扩展名）
+  const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '')
+  customFileName.value = nameWithoutExt
+  isEditingFileName.value = false
 }
 
 // 文件输入框的引用
@@ -914,54 +1199,94 @@ const position = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
 
-const handleModelDrop = async (e) => {
+// 视频同步播放相关
+const originalVideoRef = ref(null)
+const resultVideoRef = ref(null)
+const isVideoPlaying = ref(false)
+
+const handleModelDrop = (e) => {
   const file = e.dataTransfer.files[0]
   if (file && (file.name.endsWith('.pt') || file.name.endsWith('.pth'))) {
-    await uploadModelFile(file)
+    showWeightConfirmDialog(file)
   }
 }
 
-const handleModelSelect = async (e) => {
+const handleModelSelect = (e) => {
   const file = e.target.files[0]
   if (file) {
-    await uploadModelFile(file)
+    showWeightConfirmDialog(file)
   }
 }
 
-const uploadModelFile = async (file) => {
-  selectedModelName.value = file.name
+// 显示权重确认弹窗
+const showWeightConfirmDialog = (file) => {
   pendingModelFile = file
+  selectedModelName.value = file.name
+  showWeightDialog.value = true
+  // 重置输入框
+  modelWeightName.value = ''
+  modelWeightDescription.value = ''
+}
+
+// 确认上传权重
+const confirmUploadWeight = async () => {
+  if (!pendingModelFile) return
+  
+  // 关闭确认弹窗，显示加载弹窗
+  showWeightDialog.value = false
   isUploadingModel.value = true
   uploadError.value = null
   
   try {
-    const result = await detectionStore.uploadModel(file)
+    const result = await detectionStore.uploadModel(
+      pendingModelFile,
+      modelWeightName.value || null,
+      modelWeightDescription.value || null
+    )
     if (!result.success) {
       uploadError.value = result.error || '上传失败，请检查网络连接'
+    } else {
+      // 上传成功后重新加载权重列表
+      await loadUserWeights()
     }
   } catch (error) {
     uploadError.value = error.message || '上传失败，请确保后端服务已启动'
     console.error('模型上传错误:', error)
   } finally {
     isUploadingModel.value = false
+    pendingModelFile = null
   }
 }
 
-const retryUpload = async () => {
+// 取消上传
+const cancelUploadWeight = () => {
+  showWeightDialog.value = false
+  pendingModelFile = null
+  selectedModelName.value = ''
+  modelWeightName.value = ''
+  modelWeightDescription.value = ''
+}
+
+const retryUpload = () => {
   if (pendingModelFile) {
-    await uploadModelFile(pendingModelFile)
+    showWeightDialog.value = true
   }
 }
 
 const reselectModel = () => {
   pendingModelFile = null
   selectedModelName.value = ''
+  modelWeightName.value = ''
+  modelWeightDescription.value = ''
   uploadError.value = null
+  selectedWeightId.value = null
   detectionStore.modelFile = null
   detectionStore.modelUploaded = false
   if (modelInput.value) {
     modelInput.value.value = ''
   }
+  // 重新加载权重列表以更新状态
+  loadUserWeights()
 }
 
 const handleFileSelect = (e) => {
@@ -980,6 +1305,8 @@ const handleFileDrop = (event) => {
 
 const clearSelectedFile = () => {
   selectedFile.value = null
+  customFileName.value = ''
+  isEditingFileName.value = false
   if (fileInput.value) {
     fileInput.value.value = ''
   }
@@ -1028,6 +1355,78 @@ const openPreview = (mode) => {
 const closePreview = () => {
   showPreview.value = false
   resetZoom()
+  // 暂停所有视频
+  if (originalVideoRef.value) originalVideoRef.value.pause()
+  if (resultVideoRef.value) resultVideoRef.value.pause()
+  isVideoPlaying.value = false
+}
+
+// 视频同步播放/暂停
+const toggleVideoPlayback = () => {
+  if (fileType.value !== 'video') return
+  
+  const videos = []
+  if (previewMode.value === 'both' || previewMode.value === 'original') {
+    if (originalVideoRef.value) videos.push(originalVideoRef.value)
+  }
+  if (previewMode.value === 'both' || previewMode.value === 'result') {
+    if (resultVideoRef.value) videos.push(resultVideoRef.value)
+  }
+  
+  if (videos.length === 0) return
+  
+  if (isVideoPlaying.value) {
+    // 暂停所有视频
+    videos.forEach(video => video.pause())
+    isVideoPlaying.value = false
+  } else {
+    // 同步播放所有视频
+    // 1. 如果所有视频都已播放完毕，从头开始
+    // 2. 如果视频位置不同步，同步到第一个视频的位置
+    // 3. 否则从当前位置继续播放
+    const allEnded = videos.every(video => video.ended)
+    
+    if (allEnded) {
+      // 所有视频都播放完了，从头开始
+      videos.forEach(video => {
+        video.currentTime = 0
+        video.play()
+      })
+    } else if (videos.length > 1) {
+      // 多个视频时，同步到第一个视频的位置
+      const syncTime = videos[0].currentTime
+      videos.forEach(video => {
+        video.currentTime = syncTime
+        video.play()
+      })
+    } else {
+      // 单个视频，直接播放
+      videos[0].play()
+    }
+    
+    isVideoPlaying.value = true
+  }
+}
+
+// 重置视频到开始位置（暂停状态）
+const resetVideos = () => {
+  if (fileType.value !== 'video') return
+  
+  const videos = []
+  if (previewMode.value === 'both' || previewMode.value === 'original') {
+    if (originalVideoRef.value) videos.push(originalVideoRef.value)
+  }
+  if (previewMode.value === 'both' || previewMode.value === 'result') {
+    if (resultVideoRef.value) videos.push(resultVideoRef.value)
+  }
+  
+  // 重置所有视频到开始位置并暂停
+  videos.forEach(video => {
+    video.pause()
+    video.currentTime = 0
+  })
+  
+  isVideoPlaying.value = false
 }
 
 // 放大
@@ -1085,6 +1484,7 @@ const resetAllStates = () => {
     isUploadingModel.value = false
     uploadError.value = null
     pendingModelFile = null
+    selectedWeightId.value = null
     fileType.value = 'image'
     
     // 清空文件输入框的value（关键修复 - 解决重新选择文件无反应的问题）
@@ -1106,6 +1506,9 @@ const resetAllStates = () => {
     showPreview.value = false
     resetZoom()
     
+    // 重新加载权重列表
+    loadUserWeights()
+    
     // 返回到步骤1
     currentStep.value = 1
     
@@ -1113,7 +1516,140 @@ const resetAllStates = () => {
   }
 }
 
+// 加载用户的权重列表
+const loadUserWeights = async () => {
+  loadingWeights.value = true
+  try {
+    const token = (await supabase.auth.getSession()).data.session?.access_token
+    if (!token) return
+
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/model-weights`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      availableWeights.value = data.weights || []
+      
+      // 不自动选择权重，用户需要主动点击选择
+    }
+  } catch (error) {
+    console.error('加载权重列表失败:', error)
+  } finally {
+    loadingWeights.value = false
+  }
+}
+
+// 选择已有权重
+const selectExistingWeight = async (weight) => {
+  isSelectingWeight.value = true
+  try {
+    const token = (await supabase.auth.getSession()).data.session?.access_token
+    if (!token) {
+      alert('未登录，请重新登录')
+      return
+    }
+
+    // 激活选中的权重
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/model-weights/${weight.id}/activate`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    if (response.ok) {
+      // 更新本地状态
+      selectedWeightId.value = weight.id
+      selectedModelName.value = weight.name
+      detectionStore.modelUploaded = true
+      
+      // 重新加载权重列表
+      await loadUserWeights()
+    } else {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || '激活权重失败')
+    }
+  } catch (error) {
+    console.error('选择权重失败:', error)
+    alert('选择权重失败: ' + error.message)
+  } finally {
+    isSelectingWeight.value = false
+  }
+}
+
+// 监听步骤变化，设置滑动方向
+watch(currentStep, (newStep, oldStep) => {
+  previousStep.value = oldStep
+  // 向前切换（步骤增大）使用 slide-left，向后切换（步骤减小）使用 slide-right
+  slideDirection.value = newStep > oldStep ? 'slide-left' : 'slide-right'
+})
+
 onMounted(() => {
   detectionStore.loadHistory()
+  loadUserWeights()
 })
 </script>
+
+<style scoped>
+/* 向前切换动画（步骤增大，如1→2→3→4）：旧内容向上滑出，新内容从下方滑入 */
+.slide-left-enter-active,
+.slide-left-leave-active {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-left-enter-from {
+  opacity: 0;
+  transform: translateY(80px);
+}
+
+.slide-left-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.slide-left-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.slide-left-leave-to {
+  opacity: 0;
+  transform: translateY(-80px);
+}
+
+/* 向后切换动画（步骤减小，如4→3→2→1）：旧内容向下滑出，新内容从上方滑入 */
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-right-enter-from {
+  opacity: 0;
+  transform: translateY(-80px);
+}
+
+.slide-right-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.slide-right-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.slide-right-leave-to {
+  opacity: 0;
+  transform: translateY(80px);
+}
+
+/* 确保绝对定位的元素不影响布局 */
+.card.absolute {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+</style>

@@ -1,19 +1,37 @@
 # Repository Guidelines
 
 ## 项目结构与模块组织
-前端 采用 Vite + Vue 3 架构，核心 组件 位于 `src/`，状态 管理由 Pinia 模块 存放 在 `src/stores/`，可复用 逻辑 放在 `src/composables/`，静态 资源 位于 `public/`。`dist/` 为 构建 输出，禁止 手动 修改。后端 FastAPI 代码 存于 `backend/`，`main.py` 提供 推理 接口，`models/` 存放 YOLOv8 权重，`uploads/` 与 `results/` 保存 运行时 上传 与 结果，`tests/` 用于 自动化 验证。环境 模板 为 `.env.example` 与 `backend/.env.example`，根 目录 托管 支持 脚本。
+- 前端代码位于 `src/`，核心 Vue 组件放在 `src/components/`，复用逻辑集中于 `src/composables/`，Pinia 状态存放在 `src/stores/`。
+- 静态资源来自 `public/`，构建产物生成到 `dist/`，请勿手动修改。
+- FastAPI 后端位于 `backend/`；`backend/main.py` 提供推理接口，YOLOv8 权重置于 `backend/models/`，运行时上传与结果分别写入 `backend/uploads/`、`backend/results/`，调试结束记得清理。
+- 后端测试集中在 `backend/tests/`，文件命名遵循 `test_<feature>.py`。
 
-## 构建与开发命令
-前端 首次 执行 `npm install`，日常 调试 使用 `npm run dev` 访问 `http://localhost:5173`，`npm run build` 产出 生产 包，`npm run preview` 进行 本地 验证。后端 建议 创建 venv，运行 `pip install -r backend/requirements.txt` 安装 依赖，开发 态 使用 `uvicorn backend.main:app --reload --port 8000` 或 `python backend/main.py`。容器 化 场景 采用 `docker build -t yolov8-api backend` 以及 `docker run -p 8000:8000 yolov8-api`。
+## 构建、测试与开发命令
+- `npm install`：安装前端依赖。
+- `npm run dev`：启动 Vite 开发服务器（默认 `http://localhost:5173`）。
+- `npm run build` / `npm run preview`：构建并本地验证生产包。
+- `python -m venv .venv && source .venv/bin/activate`（PowerShell 使用 `.venv\Scripts\Activate.ps1`）：创建并激活虚拟环境。
+- `pip install -r backend/requirements.txt`：安装后端依赖。
+- `uvicorn backend.main:app --reload --port 8000` 或 `python backend/main.py`：本地运行推理服务。
+- `pytest backend/tests`：执行后端测试套件。
 
-## 编码风格与命名约定
-`.editorconfig` 统一 为 UTF-8 编码 与 LF 换行。Vue、JS、TS 文件 使用 两个 空格 缩进，Python 文件 采用 四个 空格。组件 文件 建议 PascalCase，路由 与 资源 名称 使用 kebab-case，Python 函数 与 变量 维持 snake_case，异步 端点 明确 以 `_async` 结尾。提交 前 请 手动 运行 `npm run build` 与 后端 服务，确保 无 格式 或 语法 回归。
+## 编码风格与命名规范
+- 遵循 `.editorconfig`，统一 UTF-8 与 LF。
+- Vue/JS/TS 文件使用两个空格缩进，Python 文件使用四个空格。
+- Vue 组件文件命名为 PascalCase，路由与静态资源采用 kebab-case。
+- Python 变量与函数使用 snake_case，异步端点名称需以 `_async` 结尾。
+- Supabase 密钥与模型参数仅可写入 `.env` 与 `backend/.env`。
 
 ## 测试规范
-后端 测试 位于 `backend/tests/`，文件 按 `test_<feature>.py` 命名，使用 pytest 运行：`pytest backend/tests`。建议 为 权重 与 媒体 构建 轻量 夹具，避免 依赖 真实 模型 文件。前端 暂以 手工 回归 为主，如 添加 组件 级 测试，请 使用 `<Component>.spec.ts` 存放 于 `src/` 并 Mock Supabase 调用，同时 在 PR 中 说明 所需 示例 媒体。
+- 使用 `pytest backend/tests`，偏好轻量夹具，避免依赖真实权重或大型媒体。
+- 覆盖 HTTP 状态码与响应结构，例如 `test_upload_validation.py` 检查上传流程。
+- 确保测试可重复、无需外部服务即可通过 CI。
 
-## 提交与合并流程
-遵循 语义 化 提交，如 `feat:`, `fix:`, `docs:`，主题 不超 60 字符，使用 祈使 语气。推送 前 清理 冗余 中间 提交。PR 应 关联 Issue，概述 前后端 影响，列出 核验 步骤（例如 `npm run build`, `pytest`, 手动 视频 演示），并 提供 UI 截图 或 API 请求 样例。敏感 配置 保留 在 本地 `.env`，若 需 数据 迁移 请 明确 说明。
+## 提交与 PR 要求
+- 采用语义化前缀（如 `feat:`, `fix:`, `docs:`），主题使用祈使句且不超过 60 字符。
+- 推送前先执行 `npm run build` 与 `pytest backend/tests`，确认无回归。
+- PR 需关联 Issue，说明前后端影响，列出验证步骤及命令输出，并附上 UI 截图或 API 示例。
 
-## 配置与安全提示
-Supabase 密钥 与 模型 参数 仅 存储 在 `.env` 系列 文件，禁止 写入 代码。`backend/uploads/` 与 `backend/results/` 仅 用于 临时 文件，测试 后 请 清理。更新 YOLO 权重 时，在 PR 中 标注 来源 链接 与 摘要 校验 信息，保障 推理 可复现。
+## 安全与配置提示
+- 应用会先读取根目录 `.env`，再加载 `backend/.env`，部署新环境时同步更新。
+- 调试或测试后及时清理 `backend/uploads/` 与 `backend/results/`，避免敏感信息泄露或磁盘占用。

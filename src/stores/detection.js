@@ -28,11 +28,17 @@ export const useDetectionStore = defineStore('detection', () => {
     return `Bearer ${session.access_token}`
   }
 
-  const uploadModel = async (file) => {
+  const uploadModel = async (file, name = null, description = null) => {
     try {
       isProcessing.value = true
       const formData = new FormData()
       formData.append('model', file)
+      if (name) {
+        formData.append('name', name)
+      }
+      if (description) {
+        formData.append('description', description)
+      }
       
       const authHeader = await getAuthHeader()
       

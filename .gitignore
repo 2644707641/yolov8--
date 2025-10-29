@@ -41,6 +41,12 @@ backend/uploads/
 backend/models/
 backend/results/
 
+# YOLOv8 模型文件（大文件，不应提交到Git）
+*.pt
+*.pth
+*.onnx
+*.weights
+
 # Vercel
 .vercel
 

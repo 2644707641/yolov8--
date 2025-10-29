@@ -17,9 +17,49 @@ ensure_torch_patch()
 
 from ultralytics import YOLO  # noqa: E402
 
-DetectionResult = Tuple[Path, List[dict], float]
+DetectionResult = Tuple[Path, List[dict], float, str]
 
 _DETECTION_SEMAPHORE = asyncio.Semaphore(settings.max_concurrent_detections)
+
+
+def _generate_description(detections: List[dict], file_type: str) -> str:
+    """生成检测结果的文字描述"""
+    if not detections:
+        return "未检测到任何目标"
+    
+    # 统计各类别数量
+    class_counts = {}
+    total_confidence = 0.0
+    
+    for det in detections:
+        class_name = det.get("class", "未知")
+        class_counts[class_name] = class_counts.get(class_name, 0) + 1
+        total_confidence += det.get("confidence", 0.0)
+    
+    # 计算平均置信度
+    avg_confidence = total_confidence / len(detections)
+    
+    # 构建描述文本
+    description_parts = []
+    
+    # 添加总数
+    description_parts.append(f"共检测到 {len(detections)} 个目标")
+    
+    # 添加各类别详情
+    if class_counts:
+        class_details = []
+        for class_name, count in sorted(class_counts.items(), key=lambda x: x[1], reverse=True):
+            class_details.append(f"{count} 个{class_name}")
+        description_parts.append("，其中包括 " + "、".join(class_details))
+    
+    # 添加置信度信息
+    description_parts.append(f"，平均置信度为 {avg_confidence:.2%}")
+    
+    # 视频特殊说明
+    if file_type == "video":
+        description_parts.append("（视频逐帧检测结果）")
+    
+    return "".join(description_parts) + "。"
 
 
 async def run_detection(
@@ -68,7 +108,7 @@ def _process_detection_sync(
     start_time = time.time()
 
     if file_type == "image":
-        result_path, detections = _detect_image(
+        result_path, detections, description = _detect_image(
             model=model,
             user_id=user_id,
             file_path=file_path,
@@ -77,7 +117,7 @@ def _process_detection_sync(
             logger=logger,
         )
     else:
-        result_path, detections = _detect_video(
+        result_path, detections, description = _detect_video(
             model=model,
             user_id=user_id,
             file_path=file_path,
@@ -88,7 +128,7 @@ def _process_detection_sync(
 
     elapsed = time.time() - start_time
     logger.info("检测完成: user=%s 用时=%.2fs", user_id, elapsed)
-    return result_path, detections, elapsed
+    return result_path, detections, elapsed, description
 
 
 def _normalize_params(raw: Dict) -> Dict:
@@ -109,7 +149,7 @@ def _detect_image(
     result_dir: Path,
     detection_params: Dict,
     logger,
-) -> Tuple[Path, List[dict]]:
+) -> Tuple[Path, List[dict], str]:
     results = model.predict(
         source=str(file_path),
         imgsz=detection_params["imgsz"],
@@ -138,7 +178,8 @@ def _detect_image(
             }
         )
 
-    return result_path, detections
+    description = _generate_description(detections, "image")
+    return result_path, detections, description
 
 
 def _detect_video(
@@ -149,7 +190,7 @@ def _detect_video(
     result_dir: Path,
     detection_params: Dict,
     logger,
-) -> Tuple[Path, List[dict]]:
+) -> Tuple[Path, List[dict], str]:
     cap = cv2.VideoCapture(str(file_path))
     if not cap.isOpened():
         raise RuntimeError("无法读取视频文件")
@@ -215,7 +256,8 @@ def _detect_video(
 
     _optimize_video_with_ffmpeg(result_path, logger)
 
-    return result_path, detections
+    description = _generate_description(detections, "video")
+    return result_path, detections, description
 
 
 def _create_video_writer(result_path, fps, width, height, logger):
