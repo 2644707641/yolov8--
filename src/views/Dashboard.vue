@@ -1127,6 +1127,43 @@
         </div>
       </div>
     </div>
+
+    <!-- 重新开始确认弹窗 -->
+    <div
+      v-if="showResetDialog"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      @click.self="cancelReset"
+    >
+      <div class="relative w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-8 shadow-2xl">
+        <div class="text-center">
+          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/20">
+            <svg class="h-8 w-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+          </div>
+          
+          <h3 class="mt-4 text-xl font-semibold text-white">确认重新开始</h3>
+          <p class="mt-2 text-sm text-slate-300">
+            这将清空所有当前的识别数据和设置，包括已上传的文件、检测参数和结果。此操作无法撤销。
+          </p>
+        </div>
+        
+        <div class="mt-6 flex gap-3">
+          <button
+            @click="confirmReset"
+            class="flex-1 rounded-xl bg-primary-500 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-primary-600"
+          >
+            确认重新开始
+          </button>
+          <button
+            @click="cancelReset"
+            class="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-white/10"
+          >
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 </template>
@@ -1158,6 +1195,7 @@ const modelWeightName = ref('')
 const modelWeightDescription = ref('')
 const isUploadingModel = ref(false)
 const uploadError = ref(null)
+const showResetDialog = ref(false)
 let pendingModelFile = null
 
 // 权重管理相关
@@ -1474,11 +1512,16 @@ const endDrag = () => {
   isDragging.value = false
 }
 
-// 重新开始 - 重置所有状态
+// 重新开始 - 显示确认弹窗
 const resetAllStates = () => {
-  // 确认对话框
-  if (confirm('确定要重新开始吗？这将清空所有当前的识别数据和设置。')) {
-    // 重置本地状态
+  showResetDialog.value = true
+}
+
+// 确认重新开始
+const confirmReset = () => {
+  showResetDialog.value = false
+  
+  // 重置本地状态
     clearSelectedFile()
     selectedModelName.value = ''
     isUploadingModel.value = false
@@ -1513,12 +1556,18 @@ const resetAllStates = () => {
     currentStep.value = 1
     
     console.log('[INFO] 已重置所有状态，返回到步骤1')
-  }
+}
+
+// 取消重新开始
+const cancelReset = () => {
+  showResetDialog.value = false
 }
 
 // 加载用户的权重列表
 const loadUserWeights = async () => {
   loadingWeights.value = true
+  // 先清空旧数据，防止显示上一个用户的权重
+  availableWeights.value = []
   try {
     const token = (await supabase.auth.getSession()).data.session?.access_token
     if (!token) return
@@ -1585,6 +1634,17 @@ watch(currentStep, (newStep, oldStep) => {
   previousStep.value = oldStep
   // 向前切换（步骤增大）使用 slide-left，向后切换（步骤减小）使用 slide-right
   slideDirection.value = newStep > oldStep ? 'slide-left' : 'slide-right'
+})
+
+// 监听用户变化，自动重新加载权重列表
+watch(() => authStore.user, (newUser, oldUser) => {
+  if (newUser?.id !== oldUser?.id) {
+    console.log('👤 用户已切换，清空Dashboard旧权重列表')
+    availableWeights.value = []
+    if (newUser) {
+      loadUserWeights()
+    }
+  }
 })
 
 onMounted(() => {

@@ -351,7 +351,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../config/supabase'
 
@@ -369,10 +369,14 @@ const pendingWeightFile = ref(null)
 const activating = ref(null)
 const deleting = ref(null)
 const deleteConfirmWeight = ref(null)
+const activatingLoading = ref(false)
+const activatingSuccess = ref(false)
 
 // 加载权重列表
 const loadWeights = async () => {
   loading.value = true
+  // 先清空旧数据，防止显示上一个用户的权重
+  weights.value = []
   try {
     const token = (await supabase.auth.getSession()).data.session?.access_token
     if (!token) {
@@ -516,6 +520,9 @@ const uploadWeight = async (file) => {
 // 激活权重
 const activateWeight = async (weightId) => {
   activating.value = weightId
+  activatingLoading.value = true
+  activatingSuccess.value = false
+  
   try {
     const token = (await supabase.auth.getSession()).data.session?.access_token
     if (!token) {
@@ -537,10 +544,21 @@ const activateWeight = async (weightId) => {
     const data = await response.json()
     console.log('✅ 权重激活成功:', data.message)
     
+    // 显示成功状态
+    activatingLoading.value = false
+    activatingSuccess.value = true
+    
+    // 2秒后自动关闭弹窗
+    setTimeout(() => {
+      activatingSuccess.value = false
+    }, 2000)
+    
     // 重新加载列表
     await loadWeights()
   } catch (error) {
     console.error('激活权重失败:', error)
+    activatingLoading.value = false
+    activatingSuccess.value = false
     alert('选择权重失败: ' + error.message)
   } finally {
     activating.value = null
@@ -614,6 +632,19 @@ const formatDate = (dateString) => {
     minute: '2-digit'
   })
 }
+
+// 监听用户变化，自动重新加载权重列表
+watch(() => authStore.user, (newUser, oldUser) => {
+  // 当用户发生变化时（登录/退出/切换账户）
+  if (newUser?.id !== oldUser?.id) {
+    console.log('👤 用户已切换，清空旧权重列表')
+    weights.value = []
+    if (newUser) {
+      // 有新用户登录，加载新用户的权重
+      loadWeights()
+    }
+  }
+})
 
 onMounted(() => {
   loadWeights()

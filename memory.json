@@ -1,0 +1,19 @@
+{"type":"entity","name":"YOLOv8停车位检测项目","entityType":"项目","observations":["使用 Vue 3 + FastAPI 架构","前端使用 Vite 构建，支持图片和视频检测","后端使用 YOLOv8 模型进行推理","集成 Supabase 进行用户认证和历史记录存储"]}
+{"type":"entity","name":"FastAPI后端","entityType":"后端服务","observations":["位于 backend/ 目录","提供 /predict 推理接口","支持图片和视频上传检测","使用 uvicorn 运行在 8000 端口","支持 CORS 跨域请求","集成 ffmpeg 处理视频文件"]}
+{"type":"entity","name":"Vue3前端","entityType":"前端应用","observations":["使用 Vite 开发服务器","默认运行在 5173 端口","使用 TailwindCSS 进行样式设计","包含检测页面和历史记录功能"]}
+{"type":"entity","name":"YOLOv8停车位识别项目","entityType":"项目","observations":["项目名称: YOLOv8智能识别停车位系统","版本: v1.2.1","前端技术栈: Vue 3 + Vite + Pinia + Vue Router + Tailwind CSS + Supabase","后端技术栈: FastAPI + YOLOv8 + OpenCV + Python 3.10+","项目路径: d:\\代码库\\应用开发\\yolov8预测停车位","前端端口: 默认5173 (Vite开发服务器)","后端端口: 8000","主要功能: 图片/视频目标检测、用户认证、历史记录管理、模型权重管理、参数调节","核心特性: 左右联动布局、四步流程式操作、实时预览、云存储集成"]}
+{"type":"entity","name":"项目结构","entityType":"架构","observations":["src/: 前端源代码，包含components、views、stores、router、config","backend/: 后端源代码，包含main.py、app/、models/、uploads/、results/","backend/app/: FastAPI应用模块化结构","public/: 静态资源","node_modules/: npm依赖包","虚拟环境: backend/.venv (需激活)","关键配置文件: .env (前端)、backend/.env (后端)、package.json、requirements.txt"]}
+{"type":"entity","name":"检测参数配置","entityType":"配置","observations":["imgSize: 160-1920px (默认640)，控制输入图片尺寸","confidence: 0.01-0.99 (默认0.5)，置信度阈值","iouThreshold: 0.05-0.95 (默认0.6)，IOU阈值用于NMS","maxDetections: 10-2000 (默认300)，最大检测数量","frameSkip: 1-10 (默认1)，视频帧间隔，1=每帧检测最流畅","推荐配置: imgSize=640, confidence=0.5, iouThreshold=0.6, maxDetections=300, frameSkip=1"]}
+{"type":"entity","name":"环境配置要求","entityType":"环境","observations":["Node.js 16+","Python 3.10+","必须配置Supabase: SUPABASE_URL和SUPABASE_KEY (使用service_role key)","前端环境变量: VITE_SUPABASE_URL、VITE_SUPABASE_ANON_KEY、VITE_API_URL","后端环境变量: SUPABASE_URL、SUPABASE_KEY、SUPABASE_BUCKET、MODEL_WEIGHTS_BUCKET","需要FFmpeg以优化视频编码","虚拟环境激活命令: .venv\\Scripts\\Activate.ps1 (PowerShell)"]}
+{"type":"entity","name":"开发工作流","entityType":"流程","observations":["启动前端: npm run dev (在根目录)","启动后端: python main.py 或 uvicorn main:app --reload (在backend/目录，需先激活虚拟环境)","构建前端: npm run build","测试后端: pytest backend/tests","Git提交格式: feat:, fix:, docs: 等语义化前缀","重要: cd命令应通过cwd参数指定，不在CommandLine中使用"]}
+{"type":"entity","name":"退出登录缓存清理功能","entityType":"功能","observations":["实现时间: 2025-10-31","修改文件: src/stores/auth.js 和 src/stores/detection.js","功能: 在用户退出登录时自动清理所有缓存数据","清理内容: modelFile、modelUploaded、detectionHistory、currentResult、detectionParams重置为默认值","实现方式: detection store新增clearCache()方法，auth store的logout()方法中调用","用户体验: 确保下一个用户登录时不会看到上一个用户的数据","已完善实现: ModelWeights.vue添加用户切换监听","ModelWeights.vue在loadWeights()开始时清空旧权重数据","detection.js的loadHistory()开始时清空旧历史记录","多层防护: 退出登录清理 + 组件加载清理 + 用户切换监听","解决问题: 用户A的权重列表不会显示给用户B"]}
+{"type":"entity","name":"重新开始自定义弹窗","entityType":"功能","observations":["实现时间: 2025-10-31","修改文件: src/views/Dashboard.vue","功能: 将重新开始的系统confirm弹窗改为自定义弹窗","新增状态: showResetDialog 控制弹窗显示","新增函数: confirmReset() 确认重置，cancelReset() 取消重置","弹窗样式: 琼珀色警告图标、详细说明文字、取消/确认按钮","交互体验: 点击外部可关闭弹窗，与其他弹窗样式一致"]}
+{"type":"relation","from":"YOLOv8停车位检测项目","to":"FastAPI后端","relationType":"包含"}
+{"type":"relation","from":"YOLOv8停车位检测项目","to":"Vue3前端","relationType":"包含"}
+{"type":"relation","from":"Vue3前端","to":"FastAPI后端","relationType":"调用"}
+{"type":"relation","from":"YOLOv8停车位识别项目","to":"项目结构","relationType":"包含"}
+{"type":"relation","from":"YOLOv8停车位识别项目","to":"检测参数配置","relationType":"使用"}
+{"type":"relation","from":"YOLOv8停车位识别项目","to":"环境配置要求","relationType":"依赖"}
+{"type":"relation","from":"YOLOv8停车位识别项目","to":"开发工作流","relationType":"遵循"}
+{"type":"relation","from":"YOLOv8停车位识别项目","to":"退出登录缓存清理功能","relationType":"实现"}
+{"type":"relation","from":"YOLOv8停车位识别项目","to":"重新开始自定义弹窗","relationType":"实现"}

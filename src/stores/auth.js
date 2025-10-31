@@ -1,4 +1,4 @@
-﻿import { defineStore } from 'pinia'
+import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabase } from '../config/supabase'
 import router from '../router'
@@ -143,7 +143,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   const logout = async () => {
     try {
+      // 清理detection store中的用户缓存
+      const { useDetectionStore } = await import('./detection')
+      const detectionStore = useDetectionStore()
+      detectionStore.clearCache()
+      
+      // 执行退出登录
       await supabase.auth.signOut()
+      
+      console.log('✅ 用户已退出登录，所有缓存已清理')
       router.push('/login')
     } catch (err) {
       console.error('登出失败:', err)

@@ -140,6 +140,8 @@ export const useDetectionStore = defineStore('detection', () => {
 
   // 加载历史记录
   const loadHistory = async () => {
+    // 先清空旧数据，防止显示上一个用户的历史记录
+    detectionHistory.value = []
     try {
       const { data: { user } } = await supabase.auth.getUser()
       
@@ -175,6 +177,23 @@ export const useDetectionStore = defineStore('detection', () => {
     }
   }
 
+  // 清理缓存（退出登录时使用）
+  const clearCache = () => {
+    modelFile.value = null
+    modelUploaded.value = false
+    detectionHistory.value = []
+    currentResult.value = null
+    // 重置参数到默认值
+    detectionParams.value = {
+      imgSize: 640,
+      confidence: 0.5,
+      iouThreshold: 0.6,
+      maxDetections: 300,
+      frameSkip: 1
+    }
+    console.log('✅ 已清理用户检测缓存')
+  }
+
   return {
     modelFile,
     modelUploaded,
@@ -185,6 +204,7 @@ export const useDetectionStore = defineStore('detection', () => {
     uploadModel,
     runDetection,
     loadHistory,
-    deleteHistory
+    deleteHistory,
+    clearCache
   }
 })
