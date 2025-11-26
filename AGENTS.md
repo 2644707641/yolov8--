@@ -1,31 +1,19 @@
 # Repository Guidelines
 
-## ÏîÄ¿½á¹¹ÓëÄ£¿é
-- Ô´Âë£ºÇë¸ù¾İ²Ö¿âÊµ¼Ê½á¹¹²¹³ä£¨Ê¾Àı£ºsrc/ ±£´æÄ£ĞÍÓëÍÆÀí½Å±¾£¬notebooks/ ´æ·ÅÊµÑé¼ÇÂ¼£©¡£
-- Êı¾İÓë×Ê²ú£ºdata/ »ò assets/ ÓÃÓÚÊı¾İ¡¢È¨ÖØÓë¿ÉÊÓ»¯×ÊÔ´£»¼ì²é´óÎÄ¼şÊÇ·ñÊÜ .gitignore ¹ÜÀí¡£
-- ²âÊÔ£ºtests/£¨»òÍ¬¼¶ *_test.py£©¼¯ÖĞµ¥Ôª/¼¯³É²âÊÔ£»scripts/ ´æ·Å¸¨Öú¹¤¾ß¡£
+## Project Structure & Module Organization
+å‰ç«¯æºç é›†ä¸­åœ¨ `src/`ï¼ˆ`components/`ã€`views/`ã€`stores/`ã€`router/`ã€`config/`ï¼‰å¹¶ç”± `App.vue` ä¸ `main.js` ç»Ÿç­¹æŒ‚è½½ï¼›é™æ€èµ„æºä½äº `public/`ï¼Œæ„å»ºäº§ç‰©å†™å…¥ `dist/`ã€‚åç«¯ä»£ç åœ¨ `backend/`ï¼Œ`main.py` æš´éœ² FastAPI æœåŠ¡ï¼Œ`requirements.txt` è®°å½• Python ä¾èµ–ï¼Œè¾…åŠ©è„šæœ¬å¦‚ `check_ffmpeg.py`ã€`video_fix_utils.py` å’Œéƒ¨ç½² Dockerfile ä¹Ÿå­˜äºæ­¤ã€‚æ ¹ç›®å½•é¢å¤–å­˜æ”¾ YOLOv8 æƒé‡ï¼ˆ`best.pt` ç­‰ï¼‰ä¸éƒ¨ç½²/å­˜å‚¨è¯´æ˜æ–‡æ¡£ï¼Œ`.env*` ç®¡ç†è·¨ç«¯é…ç½®ã€‚
 
-## ¹¹½¨¡¢ÔËĞĞÓë²âÊÔ
-- °²×°ÒÀÀµ£ºpip install -r requirements.txt£¨ÈôÓĞ GPU ĞèÇó£¬È·ÈÏ CUDA ¶ÔÓ¦°æ±¾£©¡£
-- ÑµÁ·/ÍÆÀíÊ¾Àı£ºpython main.py --config configs/example.yaml£¨¸ù¾İ²Ö¿âÊµ¼ÊÃüÁîµ÷Õû£©¡£
-- ÔËĞĞ²âÊÔ£ºpytest »ò pytest tests/£»ÈçÓĞ lint£¬Ö´ĞĞ uff check »ò lake8¡£
-- ¸ñÊ½»¯£ºlack .£¨ÈôÊ¹ÓÃ£©£»Ìá½»Ç°½¨Òé lack . && pytest¡£
+## Build, Test, and Development Commands
+å‰ç«¯ï¼š`npm install` å®‰è£…ä¾èµ–ï¼Œ`npm run dev` ä»¥ Vite å¯åŠ¨æœ¬åœ° 3000 ç«¯å£ï¼Œ`npm run build` ç”Ÿæˆç”Ÿäº§åŒ…ï¼Œ`npm run preview` æ ¡éªŒæ„å»ºè¾“å‡ºã€‚åç«¯å»ºè®®åœ¨ `.venv` æ¿€æ´»åæ‰§è¡Œ `pip install -r backend/requirements.txt`ï¼Œå†ç”¨ `python backend/main.py` æˆ– `uvicorn backend.main:app --reload` äº 8000 ç«¯å£è°ƒè¯•ï¼›`python backend/test_auth.py` ç”¨äºå¿«é€ŸéªŒè¯ Supabase service_role é…ç½®ã€‚å¸¸è§ä¸€é”®è„šæœ¬åŒ…æ‹¬ `start.ps1`ï¼ˆè”åŠ¨å‰åç«¯ï¼‰ä¸ `restart_backend.bat`ã€‚
 
-## ´úÂë·ç¸ñÓëÃüÃû
-- Python£º4 ¿Õ¸ñËõ½ø£¬ĞĞ¿í 88-100£»×ñÑ­ PEP8¡£Ä£¿é/ÎÄ¼şÓÃ snake_case£¬ÀàÓÃ PascalCase£¬³£Á¿È«´óĞ´¡£
-- º¯Êı/±äÁ¿Ê¹ÓÃÃèÊöĞÔ snake_case£¬±ÜÃâËõĞ´£»ÁÙÊ±½Å±¾·ÅÈë scripts/ ²¢Ìí¼Ó README ×¢ÊÍÓÃ·¨¡£
-- µ¼ÈëË³Ğò£º±ê×¼¿â | µÚÈı·½ | ±¾µØÄ£¿é£¬±£³Ö·ÖÀà¿ÕĞĞ£»É¾³ıÎ´Ê¹ÓÃµ¼Èë¡£
+## Coding Style & Naming Conventions
+Vue ä»£ç ä½¿ç”¨ 2 ç©ºæ ¼ç¼©è¿›ã€å•å¼•å·ã€Composition APIï¼Œå¹¶ä¿æŒç»„ä»¶æ–‡ä»¶ `PascalCase.vue`ã€å·¥å…·æ¨¡å— `kebab-case.ts`ã€‚Pinia store å‘½å `useXStore`ï¼Œè·¯ç”±å¸¸é‡ `ROUTE_HOME`ã€‚Tailwind å·¥å…·ç±»é›†ä¸­åœ¨æ¨¡æ¿ä¸­ï¼Œé¢å¤–æ ·å¼å†™å…¥ `style.css`ã€‚Python éµå¾ª PEP 8ï¼š4 ç©ºæ ¼ç¼©è¿›ã€`snake_case` å‡½æ•°/å˜é‡ã€`PascalCase` ç±»ï¼›å¼‚æ­¥ IO é€»è¾‘å•ç‹¬å°è£…åœ¨ `services/` æˆ– `utils/` ä¸­ï¼ŒYOLO å¤„ç†ä¿æŒåœ¨ `backend/detection_*` æ¨¡å—ï¼Œç¡®ä¿æ¨ç†å‡½æ•°å…·å¤‡ docstringã€‚
 
-## ²âÊÔ¹æ·¶
-- ÓÅÏÈ±àĞ´µ¥Ôª²âÊÔ£¬¹Ø¼üÂ·¾¶ĞèÓĞ¸²¸Ç£»¶ÔÄ£ĞÍÍÆÀíÌá¹©Ğ¡Ñù±¾»ò mock Êı¾İ¡£
-- ²âÊÔÃüÃû£ºÎÄ¼ş 	est_*.py£¬º¯Êı 	est_<ĞĞÎª>£»Ê¹ÓÃ fixtures ¸´ÓÃ²âÊÔ×ÊÔ´¡£
-- ¸²¸ÇÂÊ£ºÈçÓĞãĞÖµ£¨Ê¾Àı 80%£©£¬ÔÚ CI ÖĞÑéÖ¤£»±¾µØ¿ÉÔËĞĞ pytest --cov¡£
+## Testing Guidelines
+å½“å‰é‡ç‚¹æ˜¯æ‰‹åŠ¨å›å½’å…³é”®æµç¨‹ï¼ˆæ¨¡å‹ä¸Šä¼ ã€å›¾/è§†é¢‘æ£€æµ‹ã€Supabase å­˜å‚¨åŒæ­¥ï¼‰ã€‚é…ç½®ç¯å¢ƒåå…ˆè¿è¡Œ `python backend/test_auth.py`ï¼Œç¡®è®¤ service_role key å¯ç”¨ï¼Œå†æ‰§è¡Œ `npm run dev`+`python backend/main.py` è”è°ƒã€‚å‘½åè‡ªåŠ¨åŒ–æµ‹è¯•æ–‡ä»¶ä¸º `test_<module>.py` å¹¶æ”¾åœ¨ `backend/tests/`ï¼ˆå»ºè®®éµå¾ª pytest ç»“æ„ï¼‰ï¼›ä»»ä½•æ–°çš„å‰ç«¯å•æµ‹è¯·æ”¾å…¥ `src/__tests__/`ï¼Œå‘½å `<Component>.spec.ts`ï¼Œä½¿ç”¨ Vitest æˆ– Cypress è§†åœºæ™¯è¡¥é½ã€‚è‹¥æ”¹åŠ¨æ¶‰åŠç™»é™†æˆ–ä¸Šä¼ ï¼Œé™„å¸¦æˆªå›¾æˆ–å½•åƒè¯´æ˜éªŒè¯è·¯å¾„ã€‚
 
-## Ìá½»ÓëºÏ²¢
-- Ìá½»ĞÅÏ¢£º½¨Òé×ñÑ­ <type>(scope): subject£¨³£¼û type Èç feat/fix/docs/refactor/test£©¡£
-- Ã¿¸ö PR£ºÃèÊö±ä¸ü¡¢¶¯»úÓë½á¹û£»Á´½ÓÏà¹Ø issue£¬ÈôÉæ¼°¿ÉÊÓ»¯/½çÃæÇë¸½½ØÍ¼»òÈÕÖ¾¡£
-- È·±£ CI/Lint/Test Í¨¹ı£»°üº¬¸´ÏÖ²½ÖèºÍÅäÖÃ£¨ÈçÄ£ĞÍÈ¨ÖØ¡¢Éè±¸ĞÅÏ¢£©¡£
+## Commit & Pull Request Guidelines
+å‚è€ƒ `CONTRIBUTING.md`ï¼Œé‡‡ç”¨è¯­ä¹‰åŒ–å‰ç¼€ï¼š`feat`ã€`fix`ã€`docs`ã€`style`ã€`refactor`ã€`test`ã€`chore`ï¼Œä¸»é¢˜ä¿æŒ 50 å­—ç¬¦ä»¥å†…ï¼ˆç¤ºä¾‹ï¼š`feat: æ”¯æŒæ‰¹é‡æ£€æµ‹é˜Ÿåˆ—`ï¼‰ï¼Œæ­£æ–‡åˆ—å‡ºè¦ç‚¹ã€‚åˆ†æ”¯å‘½å `feature/<short-topic>`ã€`fix/<issue-id>`ï¼›PR æ¨¡æ¿éœ€åŒ…å«ï¼šé—®é¢˜èƒŒæ™¯ã€æ–¹æ¡ˆæ‘˜è¦ã€æµ‹è¯•ç»“æœï¼ˆå‘½ä»¤è¾“å‡ºæˆ–æˆªå›¾ï¼‰ã€å…³è” Issue/ä»»åŠ¡é“¾æ¥ï¼Œè‹¥ UI å˜åŒ–è¯·é™„å‰åå¯¹æ¯”å›¾ã€‚æäº¤å‰ç¡®è®¤ `npm run build` ä¸åç«¯å¯åŠ¨æ— è¯¯ï¼Œæ›´æ–°å…³è”æ–‡æ¡£ï¼ˆREADMEã€PARAMETER_GUIDE.md ç­‰ï¼‰ã€‚
 
-## °²È«ÓëÅäÖÃÌáÊ¾
-- ²»ÒªÌá½»Ë½ÓĞÊı¾İ¡¢API ÃÜÔ¿»ò´óÄ£ĞÍÈ¨ÖØ£»Ê¹ÓÃ .env ²¢ÔÚ README Ö¸³öËùĞè±äÁ¿¡£
-- È·ÈÏ .gitignore ¸²¸ÇÖĞ¼ä²úÎï£¨logs¡¢checkpoints¡¢__pycache__ µÈ£©¡£
+## Security & Configuration Tips
+å‰åç«¯ `.env` å‡ç¦æ­¢æäº¤ï¼Œç»Ÿä¸€é€šè¿‡ `cp .env.example .env` å¤åˆ¶å¹¶å¡«å†™ `VITE_SUPABASE_URL`ã€`VITE_API_URL`ã€`SUPABASE_URL`ã€`SUPABASE_KEY` ç­‰é”®ï¼Œservice_role key ä»…ç”¨äºåç«¯ã€‚éƒ¨ç½²å‰æ‰§è¡Œ `GET_JWT_SECRET.md` ä¸­çš„æŒ‡å—ç”Ÿæˆæ–°å¯†é’¥ï¼Œå¿…è¦æ—¶è¿è¡Œ `install_ffmpeg.bat` è£…é…ä¾èµ–ã€‚æƒé‡æ–‡ä»¶ (å¦‚ `best.pt`) ä¸è¦ä¸Šä¼ åˆ°å…¬å…± Forkï¼Œå¯åˆ©ç”¨ç§æœ‰å¯¹è±¡å­˜å‚¨å¹¶é€šè¿‡ `MODEL_STORAGE_SETUP.md` é…ç½®ä¸‹è½½é€»è¾‘ã€‚
