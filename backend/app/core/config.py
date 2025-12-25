@@ -7,11 +7,9 @@ from dotenv import load_dotenv
 from supabase import Client, create_client
 
 BASE_DIR = Path(__file__).resolve().parents[3]
-BACKEND_DIR = BASE_DIR / "backend"
 
-# Load root and backend .env files so Supabase credentials are available
+# Load root .env so both frontend/backend variables are available
 load_dotenv(BASE_DIR / ".env", override=False)
-load_dotenv(BACKEND_DIR / ".env", override=False)
 
 
 @dataclass
@@ -58,4 +56,3 @@ def create_supabase_client() -> Optional[Client]:
         return None
 
     return create_client(settings.supabase_url, settings.supabase_key)
-

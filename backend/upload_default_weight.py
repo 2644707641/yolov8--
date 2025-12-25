@@ -20,7 +20,6 @@ from supabase import create_client
 # 加载环境变量
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
-load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 def upload_default_weight(weight_file_path: str | Path) -> bool:
