@@ -47,6 +47,9 @@ backend/results/
 *.onnx
 *.weights
 
+# Spec workflow
+.spec-workflow/
+
 # Vercel
 .vercel
 
