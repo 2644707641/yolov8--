@@ -5,11 +5,19 @@
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from supabase import Client
+
+MODEL_WEIGHTS_TABLE = "model_weights"
+MODEL_WEIGHTS_ARCHIVE_TABLE = "model_weights_archive"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def upload_weight_to_supabase(
@@ -154,7 +162,7 @@ def create_weight_record(
 
         # 检查用户是否已有权重，如果没有则设置为活跃
         existing = (
-            supabase_client.table("model_weights")
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
             .select("id")
             .eq("user_id", user_id)
             .execute()
@@ -164,12 +172,12 @@ def create_weight_record(
 
         # 如果设置为活跃，先取消其他权重的活跃状态
         if is_active:
-            supabase_client.table("model_weights").update(
+            supabase_client.table(MODEL_WEIGHTS_TABLE).update(
                 {"is_active": False}
             ).eq("user_id", user_id).execute()
 
         response = (
-            supabase_client.table("model_weights")
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
             .insert(
                 {
                     "user_id": user_id,
@@ -218,7 +226,7 @@ def get_active_weight(
     """
     try:
         response = (
-            supabase_client.table("model_weights")
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
             .select("*")
             .eq("user_id", user_id)
             .eq("is_active", True)
@@ -254,7 +262,7 @@ def list_user_weights(
     try:
         logger.info("查询用户 %s 的权重列表", user_id)
         response = (
-            supabase_client.table("model_weights")
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
             .select("*")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
@@ -298,13 +306,13 @@ def activate_weight(
         logger.info("激活权重: user=%s weight_id=%s", user_id, weight_id)
 
         # 先取消所有权重的活跃状态
-        supabase_client.table("model_weights").update(
+        supabase_client.table(MODEL_WEIGHTS_TABLE).update(
             {"is_active": False}
         ).eq("user_id", user_id).execute()
 
         # 激活指定权重
         response = (
-            supabase_client.table("model_weights")
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
             .update({"is_active": True})
             .eq("id", weight_id)
             .eq("user_id", user_id)
@@ -344,7 +352,7 @@ def delete_weight(
 
         # 先查询权重记录
         response = (
-            supabase_client.table("model_weights")
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
             .select("file_path")
             .eq("id", weight_id)
             .eq("user_id", user_id)
@@ -360,7 +368,7 @@ def delete_weight(
         file_path = data[0].get("file_path")
 
         # 删除数据库记录
-        supabase_client.table("model_weights").delete().eq(
+        supabase_client.table(MODEL_WEIGHTS_TABLE).delete().eq(
             "id", weight_id
         ).eq("user_id", user_id).execute()
 
@@ -369,6 +377,229 @@ def delete_weight(
     except Exception as exc:
         logger.error("删除权重失败: %s", exc)
     return None
+
+
+def archive_weight(
+    supabase_client: Client,
+    *,
+    user_id: str,
+    weight_id: str,
+    deleted_by: Optional[str] = None,
+    logger,
+) -> Optional[dict]:
+    """
+    将指定权重归档后从主表删除。
+
+    Returns:
+        归档记录，失败或记录不存在返回 None
+    """
+    deleted_by = deleted_by or user_id
+    archived_weight = None
+
+    try:
+        logger.info("归档删除权重: user=%s weight_id=%s", user_id, weight_id)
+
+        response = (
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
+            .select("id,user_id,name,file_path,file_size,description,created_at,is_active")
+            .eq("id", weight_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+
+        data = getattr(response, "data", None)
+        if not data:
+            logger.warning("待归档权重不存在: weight_id=%s", weight_id)
+            return None
+
+        current_weight = data[0]
+        archive_payload = {
+            "original_weight_id": str(current_weight.get("id")),
+            "user_id": current_weight.get("user_id"),
+            "name": current_weight.get("name"),
+            "file_path": current_weight.get("file_path"),
+            "file_size": current_weight.get("file_size") or 0,
+            "description": current_weight.get("description"),
+            "original_created_at": current_weight.get("created_at"),
+            "was_active": bool(current_weight.get("is_active")),
+            "deleted_at": _utc_now_iso(),
+            "deleted_by": deleted_by,
+            "is_restored": False,
+            "restored_at": None,
+            "restored_by": None,
+        }
+
+        archive_response = (
+            supabase_client.table(MODEL_WEIGHTS_ARCHIVE_TABLE)
+            .insert(archive_payload)
+            .execute()
+        )
+        archive_data = getattr(archive_response, "data", None)
+        if not archive_data:
+            logger.error("归档写入失败: weight_id=%s", weight_id)
+            return None
+
+        archived_weight = archive_data[0]
+
+        # 主表删除放在归档写入成功之后，避免数据丢失。
+        try:
+            supabase_client.table(MODEL_WEIGHTS_TABLE).delete().eq(
+                "id", weight_id
+            ).eq("user_id", user_id).execute()
+        except Exception as exc:
+            archive_id = archived_weight.get("archive_id")
+            if archive_id:
+                try:
+                    supabase_client.table(MODEL_WEIGHTS_ARCHIVE_TABLE).delete().eq(
+                        "archive_id", archive_id
+                    ).eq("user_id", user_id).execute()
+                except Exception as rollback_exc:
+                    logger.warning(
+                        "主表删除失败且归档回滚失败: weight_id=%s archive_id=%s err=%s",
+                        weight_id,
+                        archive_id,
+                        rollback_exc,
+                    )
+            logger.error("主表删除失败，归档已回滚: %s", exc)
+            return None
+
+        logger.info(
+            "权重归档删除成功: weight_id=%s archive_id=%s",
+            weight_id,
+            archived_weight.get("archive_id"),
+        )
+        return archived_weight
+    except Exception as exc:
+        logger.error("归档删除权重失败: %s", exc)
+    return None
+
+
+def list_archived_weights(
+    supabase_client: Client,
+    *,
+    user_id: str,
+    include_restored: bool = False,
+    logger,
+) -> list[dict]:
+    """
+    查询用户的归档权重列表。
+    """
+    try:
+        logger.info(
+            "查询用户归档权重: user=%s include_restored=%s",
+            user_id,
+            include_restored,
+        )
+        query = (
+            supabase_client.table(MODEL_WEIGHTS_ARCHIVE_TABLE)
+            .select("*")
+            .eq("user_id", user_id)
+            .order("deleted_at", desc=True)
+        )
+        if not include_restored:
+            query = query.eq("is_restored", False)
+
+        response = query.execute()
+        data = getattr(response, "data", None)
+        if data:
+            logger.info("查询到 %d 条归档权重记录", len(data))
+            return data
+
+        logger.info("未查询到归档权重数据")
+    except Exception as exc:
+        logger.error("查询归档权重失败: %s", exc)
+    return []
+
+
+def restore_archived_weight(
+    supabase_client: Client,
+    *,
+    user_id: str,
+    archive_id: str,
+    restore_by: Optional[str] = None,
+    logger,
+) -> dict[str, Any]:
+    """
+    从归档表恢复权重到主表。
+
+    恢复激活策略：
+    - was_active=False -> 恢复后不激活
+    - was_active=True 且当前已有激活权重 -> 恢复后不激活
+    - was_active=True 且当前无激活权重 -> 恢复后激活
+    """
+    restore_by = restore_by or user_id
+
+    try:
+        logger.info("恢复归档权重: user=%s archive_id=%s", user_id, archive_id)
+        response = (
+            supabase_client.table(MODEL_WEIGHTS_ARCHIVE_TABLE)
+            .select("*")
+            .eq("archive_id", archive_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        data = getattr(response, "data", None)
+        if not data:
+            logger.warning("归档记录不存在: archive_id=%s", archive_id)
+            return {"status": "not_found", "weight": None}
+
+        archived_weight = data[0]
+        if bool(archived_weight.get("is_restored")):
+            logger.warning("归档记录已恢复: archive_id=%s", archive_id)
+            return {"status": "already_restored", "weight": None}
+
+        active_response = (
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        has_active_weight = bool(getattr(active_response, "data", None))
+        should_activate = bool(archived_weight.get("was_active")) and not has_active_weight
+
+        restore_payload = {
+            "user_id": archived_weight.get("user_id"),
+            "name": archived_weight.get("name"),
+            "file_path": archived_weight.get("file_path"),
+            "file_size": archived_weight.get("file_size") or 0,
+            "is_active": should_activate,
+            "description": archived_weight.get("description"),
+        }
+
+        restore_response = (
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
+            .insert(restore_payload)
+            .execute()
+        )
+        restored_data = getattr(restore_response, "data", None)
+        if not restored_data:
+            logger.error("恢复写入主表失败: archive_id=%s", archive_id)
+            return {"status": "error", "weight": None}
+
+        restored_weight = restored_data[0]
+
+        supabase_client.table(MODEL_WEIGHTS_ARCHIVE_TABLE).update(
+            {
+                "is_restored": True,
+                "restored_at": _utc_now_iso(),
+                "restored_by": restore_by,
+            }
+        ).eq("archive_id", archive_id).eq("user_id", user_id).execute()
+
+        logger.info(
+            "归档权重恢复成功: archive_id=%s restored_weight_id=%s is_active=%s",
+            archive_id,
+            restored_weight.get("id"),
+            restored_weight.get("is_active"),
+        )
+        return {"status": "ok", "weight": restored_weight}
+    except Exception as exc:
+        logger.error("恢复归档权重失败: %s", exc)
+    return {"status": "error", "weight": None}
 
 
 def get_weight_by_id(
@@ -392,7 +623,7 @@ def get_weight_by_id(
     """
     try:
         response = (
-            supabase_client.table("model_weights")
+            supabase_client.table(MODEL_WEIGHTS_TABLE)
             .select("*")
             .eq("id", weight_id)
             .eq("user_id", user_id)

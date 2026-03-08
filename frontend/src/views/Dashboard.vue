@@ -128,6 +128,9 @@
                 <span class="text-base font-semibold leading-tight">调整参数</span>
                 <p class="mt-1 text-xs text-slate-300/70">灵活调节分辨率与阈值，平衡精度与速度</p>
               </div>
+              <svg v-if="isStep3Completed" class="h-5 w-5 text-emerald-400 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
             </div>
           </button>
 
@@ -681,6 +684,45 @@
                   <span>10 · 极速</span>
                 </div>
               </div>
+
+              <div
+                v-if="fileType === 'video'"
+                class="rounded-2xl border border-primary-500/25 bg-primary-500/10 p-6"
+              >
+                <div class="flex items-baseline justify-between">
+                  <h3 class="text-sm font-semibold text-white/90">视频识别模式</h3>
+                  <span class="text-sm font-semibold text-primary-200">
+                    {{ detectionMode === 'realtime' ? '实时识别' : '批量识别' }}
+                  </span>
+                </div>
+                <p class="mt-1 text-xs text-primary-100/80">
+                  实时模式会边推理边显示结果帧；批量模式保持原来的整段处理后展示。
+                </p>
+                <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    class="rounded-xl border px-4 py-3 text-left text-sm transition-all"
+                    :class="detectionMode === 'realtime'
+                      ? 'border-primary-400/60 bg-primary-500/20 text-primary-100'
+                      : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'"
+                    @click="detectionMode = 'realtime'"
+                  >
+                    <p class="font-semibold">实时识别</p>
+                    <p class="mt-1 text-xs opacity-80">边处理边展示当前检测画面</p>
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-xl border px-4 py-3 text-left text-sm transition-all"
+                    :class="detectionMode === 'batch'
+                      ? 'border-primary-400/60 bg-primary-500/20 text-primary-100'
+                      : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'"
+                    @click="detectionMode = 'batch'"
+                  >
+                    <p class="font-semibold">批量识别</p>
+                    <p class="mt-1 text-xs opacity-80">处理完成后输出完整结果视频</p>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="mt-10 flex flex-col gap-4 border-t border-white/10 pt-6 text-sm text-slate-300/70 sm:flex-row sm:items-center sm:justify-between">
@@ -693,7 +735,7 @@
                   :disabled="!detectionStore.modelUploaded || !selectedFile || detectionStore.isProcessing"
                   @click="runDetection"
                 >
-                  {{ detectionStore.isProcessing ? '处理中…' : '开始识别 🚀' }}
+                  {{ detectionStore.isProcessing ? '处理中…' : (isRealtimeVideo ? '开始实时识别 🚀' : '开始识别 🚀') }}
                 </button>
               </div>
             </div>
@@ -721,12 +763,40 @@
                 </div>
                 <div>
                   <h3 class="text-xl font-semibold text-white">AI 正在分析素材</h3>
-                  <p class="mt-2 text-sm text-slate-300/75">使用 YOLOv8 模型推理，并应用预设的最优参数组合。</p>
+                  <p class="mt-2 text-sm text-slate-300/75">
+                    {{ isRealtimeVideo ? '实时模式：边推理边回传检测帧。' : '使用 YOLOv8 模型推理，并应用预设的最优参数组合。' }}
+                  </p>
                 </div>
                 <div class="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-slate-400/60">
                   <span>多目标追踪</span>
                   <span>智能降噪</span>
                   <span>稳定运行</span>
+                </div>
+                <div
+                  v-if="isRealtimeVideo"
+                  class="mx-auto w-full max-w-4xl rounded-2xl border border-primary-400/25 bg-white/5 p-5"
+                >
+                  <div class="mb-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300/80">
+                    <span>已发送 {{ realtimeState.sentFrames }} / {{ realtimeState.totalFrames }} 帧</span>
+                    <span>已处理 {{ realtimeState.processedFrames }} 帧</span>
+                    <span>累计检测 {{ realtimeState.totalDetections }} 个目标</span>
+                    <span>单帧耗时 {{ (realtimeState.lastInferTime || 0).toFixed(2) }}s</span>
+                  </div>
+                  <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-900/50">
+                    <img
+                      v-if="realtimePreviewUrl"
+                      :src="realtimePreviewUrl"
+                      class="max-h-[420px] w-full object-contain"
+                      alt="实时识别预览"
+                    />
+                    <div
+                      v-else
+                      class="flex h-[280px] items-center justify-center text-sm text-slate-400"
+                    >
+                      正在等待第一帧检测结果...
+                    </div>
+                  </div>
+                  <p v-if="realtimeError" class="mt-3 text-xs text-rose-300">{{ realtimeError }}</p>
                 </div>
               </div>
             </div>
@@ -735,8 +805,12 @@
               <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p class="section-title">Step 04</p>
-                  <h2 class="mt-3 text-3xl font-semibold text-white">识别完成</h2>
-                  <p class="mt-2 text-sm text-slate-300/80">以下是本次识别的核心指标与可视化结果。</p>
+                  <h2 class="mt-3 text-3xl font-semibold text-white">
+                    {{ isRealtimeResult ? '实时识别完成' : '识别完成' }}
+                  </h2>
+                  <p class="mt-2 text-sm text-slate-300/80">
+                    {{ isRealtimeResult ? '以下是实时模式返回的检测快照与统计信息。' : '以下是本次识别的核心指标与可视化结果。' }}
+                  </p>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
                   <span class="pill bg-emerald-500/20 text-emerald-200">检测完成</span>
@@ -746,8 +820,18 @@
 
               <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div class="glass-panel p-5 text-center">
-                  <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">检测目标</p>
-                  <p class="mt-3 text-3xl font-semibold text-primary-200">{{ detectionStore.currentResult.detections?.length || 0 }}</p>
+                  <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">
+                    {{ resultCountLabel }}
+                  </p>
+                  <p class="mt-3 text-3xl font-semibold text-primary-200">
+                    {{ resultTargetCount }}
+                  </p>
+                  <p
+                    v-if="resultCountHint"
+                    class="mt-2 text-[11px] text-slate-400/80"
+                  >
+                    {{ resultCountHint }}
+                  </p>
                 </div>
                 <div class="glass-panel p-5 text-center">
                   <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">置信度</p>
@@ -760,6 +844,26 @@
                 <div class="glass-panel p-5 text-center">
                   <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">推理耗时</p>
                   <p class="mt-3 text-3xl font-semibold text-primary-200">{{ (detectionStore.currentResult.processTime || 0).toFixed(2) }}s</p>
+                </div>
+              </div>
+
+              <div
+                v-if="resultClassCounts.length > 0"
+                class="glass-panel p-6"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-sm font-semibold text-white/90">分类计数</h3>
+                  <span class="text-xs text-slate-400/80">{{ resultClassCountModeLabel }}</span>
+                </div>
+                <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div
+                    v-for="item in resultClassCounts"
+                    :key="item.className"
+                    class="rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+                  >
+                    <p class="truncate text-sm text-slate-200">{{ item.className }}</p>
+                    <p class="mt-1 text-xl font-semibold text-primary-200">{{ item.count }}</p>
+                  </div>
                 </div>
               </div>
 
@@ -808,7 +912,7 @@
                   </div>
                   <div class="relative mt-4 flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-900/35 px-8 py-6">
                     <img
-                      v-if="fileType === 'image'"
+                      v-if="fileType === 'image' || showRealtimeSnapshot"
                       :src="detectionStore.currentResult.resultUrl"
                       @error="handleImageError($event, '结果图片')"
                       class="max-h-[420px] w-full object-contain"
@@ -831,10 +935,18 @@
                     <p>素材名称：{{ customFileName || selectedFile?.name || detectionStore.currentResult.fileName || '未命名素材' }}</p>
                     <p>置信度阈值：{{ Number(detectionStore.detectionParams.confidence).toFixed(2) }} · IOU：{{ Number(detectionStore.detectionParams.iouThreshold).toFixed(2) }}</p>
                     <p v-if="fileType === 'video'">视频抽帧：每 {{ detectionStore.detectionParams.frameSkip }} 帧分析一次</p>
+                    <p v-if="fileType === 'video'">识别模式：{{ isRealtimeResult ? '实时识别' : '批量识别' }}</p>
                     <p v-else>图像尺寸：{{ detectionStore.detectionParams.imgSize }} 像素</p>
                   </div>
                   <div class="flex flex-wrap items-center gap-3">
                     <button type="button" class="btn-secondary text-sm" @click="openPreview('both')">对比预览</button>
+                    <a
+                      v-if="hasRealtimeResultVideo && detectionStore.currentResult.resultDownloadUrl"
+                      :href="detectionStore.currentResult.resultDownloadUrl"
+                      class="btn-secondary text-sm"
+                    >
+                      导出视频
+                    </a>
                     <router-link to="/history" class="btn-ghost text-sm">查看历史记录</router-link>
                     <button type="button" class="btn-primary text-sm" @click="resetAllStates">重新开始</button>
                   </div>
@@ -900,7 +1012,7 @@
         </div>
         
         <!-- 视频控制按钮组 -->
-        <div v-if="fileType === 'video' && previewMode === 'both'" class="flex items-center gap-2">
+        <div v-if="fileType === 'video' && previewMode === 'both' && !showRealtimeSnapshot" class="flex items-center gap-2">
           <!-- 同步播放/暂停按钮 -->
           <button
             @click.stop="toggleVideoPlayback"
@@ -1000,22 +1112,22 @@
         >
           <div class="flex w-full items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-300/70 mb-2">
             <span>识别结果</span>
-            <span v-if="fileType === 'image'">拖拽以平移 · 滚轮缩放</span>
+            <span v-if="fileType === 'image' || showRealtimeSnapshot">拖拽以平移 · 滚轮缩放</span>
             <span v-else>视频播放</span>
           </div>
           <div
             :class="[
               'relative flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-slate-900/40 p-2',
-              fileType === 'image' ? 'cursor-move' : ''
+              (fileType === 'image' || showRealtimeSnapshot) ? 'cursor-move' : ''
             ]"
-            @mousedown="(e) => fileType === 'image' && startDrag(e)"
-            @mousemove="(e) => fileType === 'image' && onDrag(e)"
-            @mouseup="fileType === 'image' && endDrag()"
-            @mouseleave="fileType === 'image' && endDrag()"
-            @wheel.prevent="(e) => fileType === 'image' && onWheel(e)"
+            @mousedown="(e) => (fileType === 'image' || showRealtimeSnapshot) && startDrag(e)"
+            @mousemove="(e) => (fileType === 'image' || showRealtimeSnapshot) && onDrag(e)"
+            @mouseup="(fileType === 'image' || showRealtimeSnapshot) && endDrag()"
+            @mouseleave="(fileType === 'image' || showRealtimeSnapshot) && endDrag()"
+            @wheel.prevent="(e) => (fileType === 'image' || showRealtimeSnapshot) && onWheel(e)"
           >
             <img
-              v-if="fileType === 'image'"
+              v-if="fileType === 'image' || showRealtimeSnapshot"
               :src="detectionStore.currentResult.resultUrl"
               :style="{
                 transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
@@ -1175,13 +1287,14 @@ export default {
 </script>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useDetectionStore } from '../stores/detection'
 import { supabase } from '../config/supabase'
 
 const authStore = useAuthStore()
 const detectionStore = useDetectionStore()
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const currentStep = ref(1)
 const previousStep = ref(1)
@@ -1198,6 +1311,92 @@ const uploadError = ref(null)
 const showResetDialog = ref(false)
 let pendingModelFile = null
 
+// 视频实时识别相关
+const detectionMode = ref('realtime')
+const realtimePreviewUrl = ref('')
+const realtimeError = ref('')
+const realtimeState = ref({
+  active: false,
+  totalFrames: 0,
+  sentFrames: 0,
+  processedFrames: 0,
+  totalDetections: 0,
+  lastInferTime: 0
+})
+let realtimeSocket = null
+let stopRealtimeRequested = false
+let originalVideoObjectUrl = null
+const isRealtimeVideo = computed(() => fileType.value === 'video' && detectionMode.value === 'realtime')
+const isRealtimeResult = computed(() => !!detectionStore.currentResult?.realtime)
+const hasRealtimeResultVideo = computed(() => !!detectionStore.currentResult?.resultVideoUrl)
+const showRealtimeSnapshot = computed(() => isRealtimeResult.value && !hasRealtimeResultVideo.value)
+const isVideoResult = computed(() => fileType.value === 'video')
+const isStep3Completed = computed(() => detectionStore.isProcessing || !!detectionStore.currentResult)
+
+const resultTargetCount = computed(() => {
+  const result = detectionStore.currentResult
+  if (!result) return 0
+  if (isVideoResult.value) {
+    return (
+      result.uniqueTargetCount
+      ?? result.maxTargetsPerFrame
+      ?? result.totalDetections
+      ?? result.detections?.length
+      ?? 0
+    )
+  }
+  return result.totalDetections ?? result.detections?.length ?? 0
+})
+
+const resultCountLabel = computed(() => {
+  const result = detectionStore.currentResult
+  if (!result || !isVideoResult.value) return '检测目标'
+  return result.countMode === 'tracking_unique' ? '去重目标' : '单帧峰值'
+})
+
+const resultCountHint = computed(() => {
+  const result = detectionStore.currentResult
+  if (!result || !isVideoResult.value) return ''
+  const total = result.totalDetections ?? result.detections?.length ?? 0
+  if (result.countMode === 'tracking_unique') {
+    return `累计检测框 ${total}`
+  }
+  return `峰值统计，累计检测框 ${total}`
+})
+
+const resultClassCountModeLabel = computed(() => {
+  const result = detectionStore.currentResult
+  if (!result || !isVideoResult.value) return '累计分类计数'
+  return result.countMode === 'tracking_unique' ? '按跟踪去重' : '按单帧峰值'
+})
+
+const resultClassCounts = computed(() => {
+  const result = detectionStore.currentResult
+  if (!result) return []
+
+  const preferred = isVideoResult.value
+    ? (result.uniqueClassCounts || result.classCounts || {})
+    : (result.classCounts || {})
+
+  const entries = Object.entries(preferred)
+    .map(([className, count]) => ({ className, count: Number(count) || 0 }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count)
+
+  if (entries.length > 0) {
+    return entries
+  }
+
+  const fallbackCounts = {}
+  for (const det of result.detections || []) {
+    const className = det.class || '未知'
+    fallbackCounts[className] = (fallbackCounts[className] || 0) + 1
+  }
+  return Object.entries(fallbackCounts)
+    .map(([className, count]) => ({ className, count }))
+    .sort((a, b) => b.count - a.count)
+})
+
 // 权重管理相关
 const availableWeights = ref([])
 const loadingWeights = ref(false)
@@ -1208,11 +1407,16 @@ const showWeightDialog = ref(false)
 const applySelectedFile = (file) => {
   if (!file) return
 
+  stopRealtimeDetection()
+  resetRealtimeState()
+
   const mime = file.type || ''
   if (mime.startsWith('video')) {
     fileType.value = 'video'
+    detectionMode.value = 'realtime'
   } else if (mime.startsWith('image')) {
     fileType.value = 'image'
+    detectionMode.value = 'batch'
   } else {
     alert('暂不支持该文件类型，请选择图片或视频')
     return
@@ -1342,6 +1546,8 @@ const handleFileDrop = (event) => {
 }
 
 const clearSelectedFile = () => {
+  stopRealtimeDetection()
+  resetRealtimeState()
   selectedFile.value = null
   customFileName.value = ''
   isEditingFileName.value = false
@@ -1365,14 +1571,345 @@ const formatFileSize = (bytes) => {
   return `${size.toFixed(fixed)} ${units[unitIndex]}`
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const revokeRealtimePreviewUrl = () => {
+  if (realtimePreviewUrl.value && realtimePreviewUrl.value.startsWith('blob:')) {
+    URL.revokeObjectURL(realtimePreviewUrl.value)
+  }
+}
+
+const updateRealtimePreview = (blob) => {
+  revokeRealtimePreviewUrl()
+  realtimePreviewUrl.value = URL.createObjectURL(blob)
+}
+
+const resetRealtimeState = () => {
+  revokeRealtimePreviewUrl()
+  realtimePreviewUrl.value = ''
+  realtimeError.value = ''
+  realtimeState.value = {
+    active: false,
+    totalFrames: 0,
+    sentFrames: 0,
+    processedFrames: 0,
+    totalDetections: 0,
+    lastInferTime: 0
+  }
+}
+
+const closeRealtimeSocket = () => {
+  if (realtimeSocket) {
+    try {
+      realtimeSocket.close()
+    } catch (error) {
+      console.warn('关闭实时连接失败:', error)
+    }
+    realtimeSocket = null
+  }
+}
+
+const stopRealtimeDetection = () => {
+  stopRealtimeRequested = true
+  realtimeState.value.active = false
+  closeRealtimeSocket()
+}
+
+const waitForSocketOpen = (socket) => {
+  return new Promise((resolve, reject) => {
+    const onOpen = () => {
+      cleanup()
+      resolve()
+    }
+    const onError = () => {
+      cleanup()
+      reject(new Error('实时连接建立失败'))
+    }
+    const onClose = () => {
+      cleanup()
+      reject(new Error('实时连接被关闭'))
+    }
+    const cleanup = () => {
+      socket.removeEventListener('open', onOpen)
+      socket.removeEventListener('error', onError)
+      socket.removeEventListener('close', onClose)
+    }
+    socket.addEventListener('open', onOpen)
+    socket.addEventListener('error', onError)
+    socket.addEventListener('close', onClose)
+  })
+}
+
+const parseSocketMessage = async (data) => {
+  if (typeof data === 'string') {
+    return JSON.parse(data)
+  }
+
+  let arrayBuffer = null
+  if (data instanceof Blob) {
+    arrayBuffer = await data.arrayBuffer()
+  } else if (data instanceof ArrayBuffer) {
+    arrayBuffer = data
+  } else if (ArrayBuffer.isView(data)) {
+    arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+  } else {
+    throw new Error('未知的 WebSocket 数据格式')
+  }
+
+  if (arrayBuffer.byteLength < 4) {
+    throw new Error('二进制消息长度不足')
+  }
+
+  const view = new DataView(arrayBuffer)
+  const metaLength = view.getUint32(0, false)
+  if (arrayBuffer.byteLength < 4 + metaLength) {
+    throw new Error('二进制消息元数据损坏')
+  }
+
+  const metaBytes = new Uint8Array(arrayBuffer, 4, metaLength)
+  const meta = JSON.parse(new TextDecoder().decode(metaBytes))
+  const imageBytes = new Uint8Array(arrayBuffer, 4 + metaLength)
+  const imageBlob = new Blob([imageBytes], { type: 'image/jpeg' })
+  return {
+    ...meta,
+    imageBlob
+  }
+}
+
+const waitForSocketPacket = (socket, timeoutMs = 120000) => {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup()
+      reject(new Error('实时识别响应超时'))
+    }, timeoutMs)
+
+    const onMessage = async (event) => {
+      cleanup()
+      try {
+        const parsed = await parseSocketMessage(event.data)
+        resolve(parsed)
+      } catch (error) {
+        reject(new Error('实时识别响应解析失败'))
+      }
+    }
+    const onError = () => {
+      cleanup()
+      reject(new Error('实时识别连接发生错误'))
+    }
+    const onClose = () => {
+      cleanup()
+      reject(new Error('实时识别连接已断开'))
+    }
+    const cleanup = () => {
+      clearTimeout(timer)
+      socket.removeEventListener('message', onMessage)
+      socket.removeEventListener('error', onError)
+      socket.removeEventListener('close', onClose)
+    }
+
+    socket.addEventListener('message', onMessage)
+    socket.addEventListener('error', onError)
+    socket.addEventListener('close', onClose)
+  })
+}
+
+const canvasToJpegBlob = (canvas) => {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error('视频帧编码失败'))
+          return
+        }
+        resolve(blob)
+      },
+      'image/jpeg',
+      0.8
+    )
+  })
+}
+
+const runRealtimeVideoDetection = async (file) => {
+  resetRealtimeState()
+  stopRealtimeRequested = false
+  detectionStore.currentResult = null
+  detectionStore.isProcessing = true
+  realtimeState.value.active = true
+  const startedAt = performance.now()
+
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  if (!token) {
+    throw new Error('未检测到有效登录会话，请重新登录后重试')
+  }
+
+  const apiUrl = new URL(API_URL)
+  apiUrl.protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+  apiUrl.pathname = '/ws/detect-live'
+  apiUrl.search = ''
+  apiUrl.searchParams.set('token', token)
+
+  const processingVideoUrl = URL.createObjectURL(file)
+
+  try {
+    realtimeSocket = new WebSocket(apiUrl.toString())
+    await waitForSocketOpen(realtimeSocket)
+
+    const expectedFps = 25
+    const sampleFps = Math.max(
+      2,
+      Math.min(12, Math.round(expectedFps / Math.max(1, detectionStore.detectionParams.frameSkip || 1)))
+    )
+
+    realtimeSocket.send(
+      JSON.stringify({
+        type: 'start',
+        params: detectionStore.detectionParams,
+        recording: {
+          enabled: true,
+          fps: sampleFps
+        }
+      })
+    )
+
+    const readyPacket = await waitForSocketPacket(realtimeSocket)
+    if (readyPacket.type === 'error') {
+      throw new Error(readyPacket.detail || '实时识别初始化失败')
+    }
+
+    const video = document.createElement('video')
+    video.preload = 'auto'
+    video.muted = true
+    video.playsInline = true
+    video.src = processingVideoUrl
+
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = () => resolve()
+      video.onerror = () => reject(new Error('视频元数据读取失败'))
+    })
+
+    const duration = Number(video.duration)
+    if (!Number.isFinite(duration) || duration <= 0) {
+      throw new Error('视频时长无效，无法实时识别')
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(2, video.videoWidth)
+    canvas.height = Math.max(2, video.videoHeight)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      throw new Error('无法创建画布上下文')
+    }
+
+    const sampleInterval = 1 / sampleFps
+    const totalFrames = Math.max(1, Math.ceil(duration / sampleInterval))
+    realtimeState.value.totalFrames = totalFrames
+
+    await video.play()
+    let nextCaptureTime = 0
+    let sentFrames = 0
+
+    while (sentFrames < totalFrames) {
+      if (stopRealtimeRequested) {
+        throw new Error('实时识别已取消')
+      }
+
+      if (video.ended) {
+        break
+      }
+
+      if (video.currentTime + 0.001 < nextCaptureTime) {
+        await sleep(8)
+        continue
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const frameBlob = await canvasToJpegBlob(canvas)
+      const frameBuffer = await frameBlob.arrayBuffer()
+      realtimeSocket.send(frameBuffer)
+
+      sentFrames += 1
+      realtimeState.value.sentFrames = sentFrames
+      nextCaptureTime += sampleInterval
+
+      const packet = await waitForSocketPacket(realtimeSocket)
+      if (packet.type === 'error') {
+        throw new Error(packet.detail || '实时识别帧处理失败')
+      }
+      if (packet.type !== 'frame') {
+        continue
+      }
+
+      realtimeState.value.processedFrames = packet.processedFrames || realtimeState.value.processedFrames
+      realtimeState.value.totalDetections = packet.totalDetections ?? realtimeState.value.totalDetections
+      realtimeState.value.lastInferTime = packet.inferTime || 0
+      if (packet.imageBlob) {
+        updateRealtimePreview(packet.imageBlob)
+      }
+    }
+
+    video.pause()
+
+    realtimeSocket.send(JSON.stringify({ type: 'end' }))
+    const donePacket = await waitForSocketPacket(realtimeSocket)
+    if (donePacket.type === 'error') {
+      throw new Error(donePacket.detail || '实时识别结束失败')
+    }
+
+    if (originalVideoObjectUrl) {
+      URL.revokeObjectURL(originalVideoObjectUrl)
+    }
+    originalVideoObjectUrl = URL.createObjectURL(file)
+
+    detectionStore.currentResult = {
+      success: true,
+      realtime: true,
+      originalUrl: originalVideoObjectUrl,
+      resultUrl: donePacket.resultUrl ? `${API_URL}${donePacket.resultUrl}` : realtimePreviewUrl.value,
+      resultVideoUrl: donePacket.resultUrl ? `${API_URL}${donePacket.resultUrl}` : '',
+      resultDownloadUrl: donePacket.downloadUrl ? `${API_URL}${donePacket.downloadUrl}` : '',
+      detections: [],
+      totalDetections: donePacket.totalDetections || realtimeState.value.totalDetections,
+      uniqueTargetCount: donePacket.uniqueTargetCount ?? 0,
+      classCounts: donePacket.classCounts || {},
+      uniqueClassCounts: donePacket.classCounts || {},
+      countMode: donePacket.countMode || 'frame_peak',
+      maxTargetsPerFrame: donePacket.maxTargetsPerFrame ?? 0,
+      description: donePacket.description || '实时识别完成',
+      processTime: (performance.now() - startedAt) / 1000
+    }
+  } finally {
+    realtimeState.value.active = false
+    detectionStore.isProcessing = false
+    closeRealtimeSocket()
+    URL.revokeObjectURL(processingVideoUrl)
+  }
+}
+
 const runDetection = async () => {
-  if (selectedFile.value) {
-    currentStep.value = 4  // 跳转到结果页面
+  if (!selectedFile.value) return
+
+  realtimeError.value = ''
+  currentStep.value = 4  // 跳转到结果页面
+
+  try {
+    if (isRealtimeVideo.value) {
+      await runRealtimeVideoDetection(selectedFile.value)
+      return
+    }
+
+    stopRealtimeDetection()
+    resetRealtimeState()
+
     const result = await detectionStore.runDetection(selectedFile.value, fileType.value)
     if (!result.success) {
       alert('识别失败: ' + result.error)
       currentStep.value = 3  // 识别失败返回参数页面
     }
+  } catch (error) {
+    realtimeError.value = error.message || '实时识别失败'
+    alert('识别失败: ' + realtimeError.value)
+    currentStep.value = 3
   }
 }
 
@@ -1520,6 +2057,8 @@ const resetAllStates = () => {
 // 确认重新开始
 const confirmReset = () => {
   showResetDialog.value = false
+  stopRealtimeDetection()
+  resetRealtimeState()
   
   // 重置本地状态
     clearSelectedFile()
@@ -1529,6 +2068,7 @@ const confirmReset = () => {
     pendingModelFile = null
     selectedWeightId.value = null
     fileType.value = 'image'
+    detectionMode.value = 'batch'
     
     // 清空文件输入框的value（关键修复 - 解决重新选择文件无反应的问题）
     if (modelInput.value) {
@@ -1538,11 +2078,16 @@ const confirmReset = () => {
     detectionStore.modelFile = null
     detectionStore.modelUploaded = false
     detectionStore.currentResult = null
+    if (originalVideoObjectUrl) {
+      URL.revokeObjectURL(originalVideoObjectUrl)
+      originalVideoObjectUrl = null
+    }
     detectionStore.detectionParams = {
       imgSize: 640,
       confidence: 0.5,
       iouThreshold: 0.6,
-      maxDetections: 300
+      maxDetections: 300,
+      frameSkip: 1
     }
     
     // 重置预览状态
@@ -1572,7 +2117,7 @@ const loadUserWeights = async () => {
     const token = (await supabase.auth.getSession()).data.session?.access_token
     if (!token) return
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/model-weights`, {
+    const response = await fetch(`${API_URL}/api/model-weights`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -1602,7 +2147,7 @@ const selectExistingWeight = async (weight) => {
     }
 
     // 激活选中的权重
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/model-weights/${weight.id}/activate`, {
+    const response = await fetch(`${API_URL}/api/model-weights/${weight.id}/activate`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token}`
@@ -1647,9 +2192,25 @@ watch(() => authStore.user, (newUser, oldUser) => {
   }
 })
 
+watch(fileType, (newType) => {
+  if (newType === 'video') {
+    detectionMode.value = 'realtime'
+    return
+  }
+  detectionMode.value = 'batch'
+})
+
 onMounted(() => {
   detectionStore.loadHistory()
   loadUserWeights()
+})
+
+onBeforeUnmount(() => {
+  stopRealtimeDetection()
+  if (originalVideoObjectUrl) {
+    URL.revokeObjectURL(originalVideoObjectUrl)
+    originalVideoObjectUrl = null
+  }
 })
 </script>
 

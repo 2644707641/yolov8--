@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Optional
 
+import anyio
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -11,8 +13,11 @@ from fastapi import (
     Form,
     Header,
     HTTPException,
+    Query,
     Request,
     UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
     status,
 )
 from fastapi.responses import FileResponse
@@ -34,6 +39,64 @@ def get_supabase_client(request: Request):
     return getattr(request.app.state, "supabase", None)
 
 
+def get_supabase_client_from_websocket(websocket: WebSocket):
+    return getattr(websocket.app.state, "supabase", None)
+
+
+async def resolve_model_path(user_id: str, supabase_client):
+    """
+    解析用户当前可用权重路径。
+    优先级：用户激活权重 > 本地注册权重 > 默认权重。
+    """
+    model_path = None
+    if supabase_client:
+        active_weight = model_weights_service.get_active_weight(
+            supabase_client,
+            user_id=user_id,
+            logger=logger,
+        )
+
+        if active_weight:
+            cache_filename = active_weight["file_path"].split("/")[-1]
+            cache_path = settings.model_cache_dir / user_id / cache_filename
+
+            if not cache_path.exists():
+                logger.info("权重未缓存，开始下载: %s", active_weight["file_path"])
+                success = model_weights_service.download_weight_from_supabase(
+                    supabase_client,
+                    active_weight["file_path"],
+                    cache_path,
+                    bucket=settings.model_weights_bucket,
+                    logger=logger,
+                )
+                if not success:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="权重下载失败",
+                    )
+            else:
+                logger.info("使用缓存权重: %s", cache_path)
+
+            model_path = cache_path
+
+    if not model_path:
+        model_path = await model_registry.registry.get_model(user_id)
+
+    if not model_path and supabase_client:
+        logger.info("用户没有自定义权重，尝试使用默认权重")
+        model_path = model_weights_service.get_default_weight(
+            supabase_client,
+            default_path=settings.default_model_path,
+            cache_dir=settings.model_cache_dir,
+            bucket=settings.model_weights_bucket,
+            logger=logger,
+        )
+        if model_path:
+            logger.info("使用默认权重: %s", settings.default_model_name)
+
+    return model_path
+
+
 @router.get("/")
 async def root():
     return {
@@ -42,6 +105,7 @@ async def root():
         "endpoints": {
             "upload_model": "/api/upload-model",
             "detect": "/api/detect",
+            "detect_live_ws": "/ws/detect-live",
         },
     }
 
@@ -187,56 +251,7 @@ async def detect(
             file, input_path, max_size=settings.max_upload_size_bytes
         )
 
-        # 优先从 Supabase 获取活跃权重
-        model_path = None
-        if supabase_client:
-            active_weight = model_weights_service.get_active_weight(
-                supabase_client,
-                user_id=user_id,
-                logger=logger,
-            )
-
-            if active_weight:
-                # 检查本地缓存
-                cache_filename = active_weight["file_path"].split("/")[-1]
-                cache_path = settings.model_cache_dir / user_id / cache_filename
-
-                if not cache_path.exists():
-                    # 从 Supabase 下载权重
-                    logger.info("权重未缓存，开始下载: %s", active_weight["file_path"])
-                    success = model_weights_service.download_weight_from_supabase(
-                        supabase_client,
-                        active_weight["file_path"],
-                        cache_path,
-                        bucket=settings.model_weights_bucket,
-                        logger=logger,
-                    )
-                    if not success:
-                        raise HTTPException(
-                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="权重下载失败",
-                        )
-                else:
-                    logger.info("使用缓存权重: %s", cache_path)
-
-                model_path = cache_path
-
-        # 如果没有 Supabase 权重，尝试使用本地注册表
-        if not model_path:
-            model_path = await model_registry.registry.get_model(user_id)
-
-        # 如果用户没有自己的权重，使用默认权重
-        if not model_path and supabase_client:
-            logger.info("用户没有自定义权重，尝试使用默认权重")
-            model_path = model_weights_service.get_default_weight(
-                supabase_client,
-                default_path=settings.default_model_path,
-                cache_dir=settings.model_cache_dir,
-                bucket=settings.model_weights_bucket,
-                logger=logger,
-            )
-            if model_path:
-                logger.info("使用默认权重: %s", settings.default_model_name)
+        model_path = await resolve_model_path(user_id, supabase_client)
 
         if not model_path:
             raise HTTPException(
@@ -292,12 +307,19 @@ async def detect(
             except Exception as exc:
                 logger.warning("保存到 Supabase 失败: %s", exc)
 
+        metrics = detection_service.build_result_metrics(detections, type)
         response_payload = {
             "success": True,
             "resultUrl": f"/api/results/{result_path.name}",
             "originalUrlSupabase": original_url,
             "resultUrlSupabase": result_url_supabase,
             "detections": detections,
+            "totalDetections": metrics["totalDetections"],
+            "uniqueTargetCount": metrics["uniqueTargetCount"],
+            "classCounts": metrics["classCounts"],
+            "uniqueClassCounts": metrics["uniqueClassCounts"],
+            "countMode": metrics["countMode"],
+            "maxTargetsPerFrame": metrics["maxTargetsPerFrame"],
             "description": description,
             "processTime": elapsed,
             "params": detection_params,
@@ -307,11 +329,308 @@ async def detect(
         storage_service.remove_file(input_path, logger)
 
 
+@router.websocket("/ws/detect-live")
+async def detect_live(websocket: WebSocket):
+    await websocket.accept()
+
+    supabase_client = get_supabase_client_from_websocket(websocket)
+    token = websocket.query_params.get("token")
+
+    try:
+        user_id = await auth_service.validate_token(token, supabase_client)
+    except HTTPException as exc:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "detail": exc.detail,
+            }
+        )
+        await websocket.close(code=4401)
+        return
+
+    model = None
+    detection_params = None
+    processed_frames = 0
+    total_detections = 0
+    frame_index = 0
+    record_enabled = False
+    record_fps = 8.0
+    record_path = None
+    record_writer = None
+    peak_targets_per_frame = 0
+    unique_track_ids_by_class: dict[str, set[str]] = {}
+    peak_class_counts: dict[str, int] = {}
+    class_counts_output: dict[str, int] = {}
+    count_mode = "frame_peak"
+
+    try:
+        while True:
+            message = await websocket.receive()
+            message_type = message.get("type")
+            if message_type == "websocket.disconnect":
+                break
+
+            text_payload = message.get("text")
+            frame_bytes = message.get("bytes")
+
+            if text_payload is not None:
+                try:
+                    payload = json.loads(text_payload)
+                except json.JSONDecodeError:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "detail": "消息格式错误，仅支持 JSON 控制消息",
+                        }
+                    )
+                    continue
+
+                command = payload.get("type")
+                if command == "start":
+                    params = payload.get("params", {})
+                    recording = payload.get("recording", {}) or {}
+                    detection_params = detection_service.normalize_params(params)
+                    model_path = await resolve_model_path(user_id, supabase_client)
+
+                    if not model_path:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "detail": "请先上传模型文件或确保默认权重已配置",
+                            }
+                        )
+                        await websocket.close(code=4400)
+                        return
+
+                    model = await anyio.to_thread.run_sync(
+                        detection_service.load_model_sync, model_path
+                    )
+                    record_enabled = bool(recording.get("enabled", False))
+                    record_fps = float(recording.get("fps", 8.0) or 8.0)
+                    if record_fps <= 0:
+                        record_fps = 8.0
+                    record_path = None
+                    if record_writer is not None:
+                        record_writer.release()
+                    record_writer = None
+
+                    logger.info("实时检测模型加载成功: user=%s model=%s", user_id, model_path)
+                    await websocket.send_json(
+                        {
+                            "type": "ready",
+                            "message": "实时识别已启动",
+                        }
+                    )
+                elif command == "end":
+                    result_url = None
+                    download_url = None
+                    if record_writer is not None:
+                        record_writer.release()
+                        record_writer = None
+
+                    if record_path and record_path.exists() and record_path.stat().st_size > 0:
+                        detection_service.optimize_video_file_sync(record_path, logger)
+                        result_url = f"/api/results/{record_path.name}"
+                        download_url = f"/api/results/{record_path.name}?download=1"
+
+                    if unique_track_ids_by_class:
+                        class_counts_output = dict(
+                            sorted(
+                                (
+                                    (class_name, len(track_ids))
+                                    for class_name, track_ids in unique_track_ids_by_class.items()
+                                ),
+                                key=lambda item: item[1],
+                                reverse=True,
+                            )
+                        )
+                        unique_target_count = sum(class_counts_output.values())
+                        count_mode = "tracking_unique"
+                    else:
+                        class_counts_output = dict(
+                            sorted(
+                                peak_class_counts.items(),
+                                key=lambda item: item[1],
+                                reverse=True,
+                            )
+                        )
+                        unique_target_count = peak_targets_per_frame
+                        count_mode = "frame_peak"
+
+                    await websocket.send_json(
+                        {
+                            "type": "done",
+                            "processedFrames": processed_frames,
+                            "totalDetections": total_detections,
+                            "uniqueTargetCount": unique_target_count,
+                            "classCounts": class_counts_output,
+                            "countMode": count_mode,
+                            "maxTargetsPerFrame": peak_targets_per_frame,
+                            "resultUrl": result_url,
+                            "downloadUrl": download_url,
+                            "description": (
+                                f"实时识别完成，共处理 {processed_frames} 帧，"
+                                f"{'估计独立目标' if count_mode == 'tracking_unique' else '单帧峰值目标'} "
+                                f"{unique_target_count} 个，累计检测框 {total_detections} 个。"
+                            ),
+                        }
+                    )
+                    await websocket.close(code=1000)
+                    return
+                continue
+
+            if frame_bytes is None:
+                continue
+
+            if model is None or detection_params is None:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "detail": "会话未初始化，请先发送 start 消息",
+                    }
+                )
+                continue
+
+            frame_index += 1
+            try:
+                annotated_frame, detections, elapsed = await anyio.to_thread.run_sync(
+                    lambda: detection_service.infer_live_frame_sync(
+                        model=model,
+                        frame_bytes=frame_bytes,
+                        detection_params=detection_params,
+                    )
+                )
+                annotated_bytes = await anyio.to_thread.run_sync(
+                    detection_service.encode_frame_to_jpeg_sync,
+                    annotated_frame,
+                    80,
+                )
+            except Exception as exc:
+                logger.warning("实时检测帧处理失败: user=%s err=%s", user_id, exc)
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "detail": f"帧处理失败: {exc}",
+                    }
+                )
+                continue
+
+            if record_enabled:
+                if record_writer is None:
+                    h, w = annotated_frame.shape[:2]
+                    record_path = settings.result_dir / f"live_result_{user_id}_{int(time.time())}.mp4"
+                    writer, codec = detection_service.create_video_writer_sync(
+                        result_path=record_path,
+                        fps=record_fps,
+                        width=w,
+                        height=h,
+                        logger=logger,
+                    )
+                    if writer is None:
+                        logger.warning("实时录制初始化失败，自动关闭录制: user=%s", user_id)
+                        record_enabled = False
+                    else:
+                        logger.info(
+                            "实时录制启动: user=%s fps=%.2f codec=%s file=%s",
+                            user_id,
+                            record_fps,
+                            codec,
+                            record_path.name,
+                        )
+                        record_writer = writer
+
+                if record_writer is not None:
+                    record_writer.write(annotated_frame)
+
+            processed_frames += 1
+            total_detections += len(detections)
+            peak_targets_per_frame = max(peak_targets_per_frame, len(detections))
+
+            current_frame_class_counts: dict[str, int] = {}
+            for det in detections:
+                class_name = det.get("class", "未知")
+                current_frame_class_counts[class_name] = (
+                    current_frame_class_counts.get(class_name, 0) + 1
+                )
+
+                track_id = det.get("track_id")
+                if track_id is not None:
+                    unique_track_ids_by_class.setdefault(class_name, set()).add(
+                        str(track_id)
+                    )
+
+            for class_name, frame_count_value in current_frame_class_counts.items():
+                previous = peak_class_counts.get(class_name, 0)
+                if frame_count_value > previous:
+                    peak_class_counts[class_name] = frame_count_value
+
+            if unique_track_ids_by_class:
+                class_counts_output = dict(
+                    sorted(
+                        (
+                            (class_name, len(track_ids))
+                            for class_name, track_ids in unique_track_ids_by_class.items()
+                        ),
+                        key=lambda item: item[1],
+                        reverse=True,
+                    )
+                )
+                unique_target_count = sum(class_counts_output.values())
+                count_mode = "tracking_unique"
+            else:
+                class_counts_output = dict(
+                    sorted(
+                        peak_class_counts.items(),
+                        key=lambda item: item[1],
+                        reverse=True,
+                    )
+                )
+                unique_target_count = peak_targets_per_frame
+                count_mode = "frame_peak"
+
+            frame_meta = {
+                "type": "frame",
+                "frameIndex": frame_index,
+                "processedFrames": processed_frames,
+                "detectionCount": len(detections),
+                "inferTime": elapsed,
+                "totalDetections": total_detections,
+                "uniqueTargetCount": unique_target_count,
+                "classCounts": class_counts_output,
+                "countMode": count_mode,
+                "maxTargetsPerFrame": peak_targets_per_frame,
+            }
+            meta_bytes = json.dumps(frame_meta, ensure_ascii=False).encode("utf-8")
+            payload = len(meta_bytes).to_bytes(4, "big") + meta_bytes + annotated_bytes
+            await websocket.send_bytes(payload)
+    except WebSocketDisconnect:
+        logger.info("实时检测连接断开: user=%s", user_id)
+    except Exception as exc:
+        logger.exception("实时检测异常: user=%s err=%s", user_id, exc)
+        try:
+            await websocket.send_json({"type": "error", "detail": str(exc)})
+            await websocket.close(code=1011)
+        except Exception:
+            pass
+    finally:
+        if record_writer is not None:
+            try:
+                record_writer.release()
+            except Exception:
+                pass
+
+
 @router.get("/api/results/{filename}")
-async def get_result(filename: str):
+async def get_result(filename: str, download: bool = False):
     file_path = settings.result_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
+    if download:
+        return FileResponse(
+            file_path,
+            filename=filename,
+            media_type="application/octet-stream",
+        )
     return FileResponse(file_path)
 
 
@@ -373,6 +692,83 @@ async def list_model_weights(
     return {
         "success": True,
         "weights": weights,
+    }
+
+
+@router.get("/api/model-weights/deleted")
+async def list_deleted_model_weights(
+    request: Request,
+    include_restored: bool = Query(False),
+    authorization: Optional[str] = Header(None),
+):
+    """列出用户归档（已删除）的模型权重"""
+    supabase_client = get_supabase_client(request)
+    user_id = await auth_service.validate_authorization(authorization, supabase_client)
+
+    if not supabase_client:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase 服务不可用",
+        )
+
+    archived_weights = model_weights_service.list_archived_weights(
+        supabase_client,
+        user_id=user_id,
+        include_restored=include_restored,
+        logger=logger,
+    )
+
+    return {
+        "success": True,
+        "weights": archived_weights,
+    }
+
+
+@router.post("/api/model-weights/deleted/{archive_id}/restore")
+async def restore_deleted_model_weight(
+    archive_id: str,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+):
+    """恢复已归档的模型权重"""
+    supabase_client = get_supabase_client(request)
+    user_id = await auth_service.validate_authorization(authorization, supabase_client)
+
+    if not supabase_client:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase 服务不可用",
+        )
+
+    restore_result = model_weights_service.restore_archived_weight(
+        supabase_client,
+        user_id=user_id,
+        archive_id=archive_id,
+        restore_by=user_id,
+        logger=logger,
+    )
+
+    restore_status = restore_result.get("status")
+    if restore_status == "not_found":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="归档记录不存在",
+        )
+    if restore_status == "already_restored":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="归档记录已恢复，请勿重复恢复",
+        )
+    if restore_status != "ok":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="恢复权重失败",
+        )
+
+    return {
+        "success": True,
+        "message": "权重已恢复",
+        "weight": restore_result.get("weight"),
     }
 
 
@@ -486,34 +882,29 @@ async def delete_model_weight(
             detail="默认权重无法删除，这是系统级权重",
         )
 
-    # 删除数据库记录
-    storage_path = model_weights_service.delete_weight(
+    # 归档后删除主表记录，存储文件保留用于后续恢复。
+    archived_weight = model_weights_service.archive_weight(
         supabase_client,
         user_id=user_id,
         weight_id=weight_id,
+        deleted_by=user_id,
         logger=logger,
     )
 
-    if not storage_path:
+    if not archived_weight:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="权重不存在",
         )
 
-    # 删除 Supabase Storage 中的文件
-    model_weights_service.delete_weight_from_supabase(
-        supabase_client,
-        storage_path,
-        bucket=settings.model_weights_bucket,
-        logger=logger,
-    )
-
     # 清理本地缓存
-    cache_path = settings.model_cache_dir / user_id / storage_path.split("/")[-1]
-    if cache_path.exists():
-        storage_service.remove_file(cache_path, logger)
+    storage_path = archived_weight.get("file_path")
+    if storage_path:
+        cache_path = settings.model_cache_dir / user_id / storage_path.split("/")[-1]
+        if cache_path.exists():
+            storage_service.remove_file(cache_path, logger)
 
     return {
         "success": True,
-        "message": "权重已删除",
+        "message": "权重已删除（可恢复）",
     }

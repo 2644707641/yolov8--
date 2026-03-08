@@ -7,19 +7,10 @@ from supabase import Client
 from app.core.config import settings
 
 
-async def validate_authorization(
-    authorization: Optional[str], supabase_client: Optional[Client]
-) -> str:
+async def validate_token(token: Optional[str], supabase_client: Optional[Client]) -> str:
     """
-    校验 Authorization 头部，返回用户 ID。
+    校验 token 并返回用户 ID。
     """
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="缺少或无效的授权头",
-        )
-
-    token = authorization.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -90,3 +81,18 @@ async def validate_authorization(
             detail="授权验证失败",
         ) from exc
 
+
+async def validate_authorization(
+    authorization: Optional[str], supabase_client: Optional[Client]
+) -> str:
+    """
+    校验 Authorization 头部，返回用户 ID。
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="缺少或无效的授权头",
+        )
+
+    token = authorization.split(" ", 1)[1].strip()
+    return await validate_token(token, supabase_client)
