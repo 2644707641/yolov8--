@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.common import run_local_cleanup_for_app
 from app.api.routes import router
 from app.core.config import (
     create_supabase_client,
@@ -8,6 +9,7 @@ from app.core.config import (
     settings,
 )
 from app.core.logging_config import setup_logging
+from app.services import local_state
 
 logger = setup_logging()
 ensure_directories()
@@ -35,10 +37,15 @@ app.add_middleware(
 app.include_router(router)
 
 app.state.supabase = supabase_client
+app.state.app_settings = local_state.load_app_settings(settings.user_settings_store_file)
 
 
 @app.on_event("startup")
 async def log_startup() -> None:
+    run_local_cleanup_for_app(
+        app,
+        logger=logger,
+    )
     logger.info("YOLOv8 Detection API 启动完成")
 
 

@@ -1,35 +1,28 @@
 <template>
-  <div class="relative min-h-screen overflow-hidden bg-slate-950">
-    <div class="pointer-events-none absolute inset-0">
-      <div class="absolute -top-24 left-1/2 h-[360px] w-[360px] -translate-x-1/2 rounded-full bg-primary-500/25 blur-3xl"></div>
-      <div class="absolute top-1/2 -left-24 h-[420px] w-[420px] -translate-y-1/2 rounded-full bg-accent-500/20 blur-3xl"></div>
-      <div class="absolute bottom-[-160px] right-0 h-[420px] w-[420px] rounded-full bg-primary-900/25 blur-3xl"></div>
-    </div>
-    <div class="relative z-10 min-h-screen">
-    <!-- 导航栏 -->
-    <nav class="sticky top-0 z-20 border-b border-white/10 bg-white/5 backdrop-blur-xl">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16 items-center">
-          <div class="flex items-center space-x-4">
-            <router-link to="/dashboard" class="text-slate-300/80 hover:text-white">
-              <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-              </svg>
-            </router-link>
-            <h1 class="text-xl font-bold text-white">识别历史记录</h1>
-          </div>
-          <div class="flex items-center space-x-4">
-            <div class="text-sm text-slate-300/80">{{ authStore.user?.email }}</div>
-            <button @click="authStore.logout" class="btn-secondary text-sm">
-              退出登录
-            </button>
-          </div>
-        </div>
+  <div class="space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p class="section-title">历史记录</p>
+        <h1 data-testid="history-title" class="mt-3 text-2xl font-semibold text-white">历史记录中心</h1>
+        <p class="mt-2 text-sm text-slate-300/80">
+          自动归档每一次识别结果，支持筛选、对比与批量管理。
+        </p>
       </div>
-    </nav>
+    <div class="flex items-center gap-3 text-xs text-slate-400/80">
+        当前账户：<span class="text-slate-100">{{ authStore.user?.email || '未登录' }}</span>
+      </div>
+    </div>
+
+    <div
+      v-if="historyError"
+      data-testid="history-error"
+      class="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+    >
+      {{ historyError }}
+    </div>
 
     <!-- 历史记录列表 -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="card">
         <!-- 分类筛选标签 -->
         <div class="mb-6 flex items-center gap-3">
@@ -104,12 +97,26 @@
               </button>
             </div>
           </div>
-          <button @click="detectionStore.loadHistory()" class="btn-secondary text-sm">
+          <div v-if="formattedLastSync" class="text-xs text-slate-400/80">
+            最近同步：{{ formattedLastSync }}
+          </div>
+          <button data-testid="history-refresh" @click="loadHistory(true)" class="btn-secondary text-sm">
             刷新
           </button>
         </div>
 
-        <div v-if="filteredHistory.length === 0" class="text-center py-12 text-slate-500/70">
+        <div
+          v-if="detectionStore.historyLoading"
+          data-testid="history-loading"
+          class="flex items-center justify-center py-12 text-slate-300/80"
+        >
+          <div class="flex flex-col items-center gap-3">
+            <div class="h-12 w-12 animate-spin rounded-full border-4 border-primary-500/20 border-t-primary-400"></div>
+            <p class="text-sm">加载中...</p>
+          </div>
+        </div>
+
+        <div v-else-if="filteredHistory.length === 0" class="text-center py-12 text-slate-500/70">
           <svg class="mx-auto h-24 w-24 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
@@ -514,9 +521,8 @@
         </div>
       </div>
     </div>
-    </div>
-    </div>
   </div>
+</div>
 </template>
 
 <script>
@@ -526,7 +532,7 @@ export default {
 </script>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useDetectionStore } from '../stores/detection'
 
@@ -549,6 +555,7 @@ const isVideoPlaying = ref(false)
 // 批量选择相关状态
 const batchMode = ref(false)
 const selectedIds = ref([])
+const isDisposed = ref(false)
 
 // 分页和筛选相关状态
 const currentPage = ref(1)
@@ -793,6 +800,25 @@ const handleBatchDelete = async () => {
 }
 
 onMounted(() => {
-  detectionStore.loadHistory()
+  loadHistory()
 })
+
+const historyError = computed(() => detectionStore.historyError || detectionStore.requestError)
+const formattedLastSync = computed(() => {
+  if (!detectionStore.lastHistorySyncAt) {
+    return ''
+  }
+  return formatDate(detectionStore.lastHistorySyncAt)
+})
+
+onBeforeUnmount(() => {
+  isDisposed.value = true
+})
+
+const loadHistory = async (force = false) => {
+  if (isDisposed.value) {
+    return
+  }
+  await detectionStore.loadHistory({ force })
+}
 </script>

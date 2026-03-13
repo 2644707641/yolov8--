@@ -1,44 +1,48 @@
 <template>
-  <div class="relative min-h-screen overflow-hidden">
-    <div class="absolute inset-0">
-      <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-black"></div>
-      <div class="absolute inset-0 bg-grid opacity-10"></div>
-      <div class="absolute -top-28 -left-32 h-96 w-96 rounded-full bg-primary-500/30 blur-3xl"></div>
-      <div class="absolute top-1/3 right-[-120px] h-[420px] w-[420px] rounded-full bg-accent-500/20 blur-3xl"></div>
-    </div>
-    <div class="relative z-10 flex min-h-screen flex-col">
-      <!-- 导航栏 -->
-      <nav class="sticky top-0 z-20 border-b border-white/10 bg-white/5 backdrop-blur-xl">
-        <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-6">
-          <div>
-            <span class="pill">YOLOv8 Suite</span>
-            <h1 class="mt-2 text-2xl font-semibold leading-tight text-gradient">
-              智能停车位识别控制台
-            </h1>
-          </div>
-          <div class="flex items-center gap-4">
-            <div class="hidden text-right text-[11px] uppercase tracking-[0.32em] text-slate-400/80 md:flex md:flex-col">
-              <span class="text-[11px] text-slate-300/80">当前账户</span>
-              <span class="text-sm font-medium text-white">{{ authStore.user?.email }}</span>
-            </div>
-            <router-link
-              to="/model-weights"
-              class="btn-secondary text-sm"
-            >
-              权重管理
-            </router-link>
-            <router-link
-              to="/history"
-              class="btn-secondary text-sm"
-            >
-              历史记录
-            </router-link>
-            <button @click="authStore.logout" class="btn-ghost text-sm">
-              退出登录
-            </button>
-          </div>
+  <div class="space-y-8">
+    <div
+      v-if="workspaceNotice"
+      data-testid="workspace-notice"
+      class="rounded-2xl border px-4 py-3 text-sm shadow-[0_18px_35px_rgba(8,15,40,0.28)]"
+      :class="workspaceNoticeClass"
+    >
+      <div class="flex items-start gap-3">
+        <div class="flex-1">
+          <p class="font-medium">{{ workspaceNotice.message }}</p>
         </div>
-      </nav>
+        <button
+          type="button"
+          data-testid="workspace-notice-close"
+          class="text-current/80 transition hover:text-current"
+          @click="clearWorkspaceNotice"
+        >
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p class="section-title">系统</p>
+        <h1 data-testid="workspace-title" class="mt-3 text-2xl font-semibold text-white">识别工作台</h1>
+        <p class="mt-2 text-sm text-slate-300/80">
+          统一管理模型、参数与识别流程，面向日常运营的核心工作区。
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-300/80">
+          当前账户：<span class="text-slate-100">{{ authStore.user?.email || '未登录' }}</span>
+        </div>
+        <router-link to="/model-weights" class="btn-secondary text-sm">
+          模型管理
+        </router-link>
+        <router-link to="/history" class="btn-secondary text-sm">
+          历史记录
+        </router-link>
+      </div>
+    </div>
 
     <!-- 主要内容 -->
     <div class="flex flex-1 flex-col overflow-hidden lg:flex-row">
@@ -495,7 +499,7 @@
 
             <div
               v-if="selectedFile"
-              class="mt-8 flex flex-col gap-4 rounded-2xl border border-primary-500/30 bg-primary-500/10 p-5 sm:flex-row sm:items-center sm:justify-between"
+              class="mt-8 grid gap-4 rounded-2xl border border-primary-500/30 bg-primary-500/10 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
             >
               <div class="flex items-start gap-4">
                 <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500/25 text-white flex-shrink-0">
@@ -725,9 +729,9 @@
               </div>
             </div>
 
-            <div class="mt-10 flex flex-col gap-4 border-t border-white/10 pt-6 text-sm text-slate-300/70 sm:flex-row sm:items-center sm:justify-between">
+            <div class="mt-10 grid gap-4 border-t border-white/10 pt-6 text-sm text-slate-300/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <p>参数会自动同步到历史记录，便于后续复现与对比。</p>
-              <div class="flex flex-wrap items-center gap-3">
+              <div class="flex flex-wrap items-center gap-3 sm:justify-self-end">
                 <button type="button" class="btn-secondary text-sm" @click="currentStep = 2">返回素材选择</button>
                 <button
                   type="button"
@@ -746,7 +750,30 @@
             <Transition :name="slideDirection" mode="out-in">
               <div v-if="currentStep === 4" key="step-4" class="absolute w-full">
             <div v-if="detectionStore.isProcessing" class="card">
-              <div class="flex flex-col items-center justify-center gap-6 py-20 text-center">
+              <div v-if="isRealtimeVideo" class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300/80">
+                  <span>已发送 {{ realtimeState.sentFrames }} / {{ realtimeState.totalFrames }} 帧</span>
+                  <span>已处理 {{ realtimeState.processedFrames }} 帧</span>
+                  <span>累计检测 {{ realtimeState.totalDetections }} 个目标</span>
+                  <span>单帧耗时 {{ (realtimeState.lastInferTime || 0).toFixed(2) }}s</span>
+                </div>
+                <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-900/50">
+                  <img
+                    v-if="realtimePreviewUrl"
+                    :src="realtimePreviewUrl"
+                    class="max-h-[420px] w-full object-contain"
+                    alt="实时识别预览"
+                  />
+                  <div
+                    v-else
+                    class="flex h-[280px] items-center justify-center text-sm text-slate-400"
+                  >
+                    正在等待第一帧检测结果...
+                  </div>
+                </div>
+                <p v-if="realtimeError" class="text-xs text-rose-300">{{ realtimeError }}</p>
+              </div>
+              <div v-else class="flex flex-col items-center justify-center gap-6 py-20 text-center">
                 <div class="relative">
                   <div class="h-24 w-24 rounded-full border border-white/10 bg-white/5"></div>
                   <div class="absolute inset-0 flex items-center justify-center">
@@ -764,39 +791,13 @@
                 <div>
                   <h3 class="text-xl font-semibold text-white">AI 正在分析素材</h3>
                   <p class="mt-2 text-sm text-slate-300/75">
-                    {{ isRealtimeVideo ? '实时模式：边推理边回传检测帧。' : '使用 YOLOv8 模型推理，并应用预设的最优参数组合。' }}
+                    使用 YOLOv8 模型推理，并应用预设的最优参数组合。
                   </p>
                 </div>
                 <div class="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-slate-400/60">
                   <span>多目标追踪</span>
                   <span>智能降噪</span>
                   <span>稳定运行</span>
-                </div>
-                <div
-                  v-if="isRealtimeVideo"
-                  class="mx-auto w-full max-w-4xl rounded-2xl border border-primary-400/25 bg-white/5 p-5"
-                >
-                  <div class="mb-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300/80">
-                    <span>已发送 {{ realtimeState.sentFrames }} / {{ realtimeState.totalFrames }} 帧</span>
-                    <span>已处理 {{ realtimeState.processedFrames }} 帧</span>
-                    <span>累计检测 {{ realtimeState.totalDetections }} 个目标</span>
-                    <span>单帧耗时 {{ (realtimeState.lastInferTime || 0).toFixed(2) }}s</span>
-                  </div>
-                  <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-900/50">
-                    <img
-                      v-if="realtimePreviewUrl"
-                      :src="realtimePreviewUrl"
-                      class="max-h-[420px] w-full object-contain"
-                      alt="实时识别预览"
-                    />
-                    <div
-                      v-else
-                      class="flex h-[280px] items-center justify-center text-sm text-slate-400"
-                    >
-                      正在等待第一帧检测结果...
-                    </div>
-                  </div>
-                  <p v-if="realtimeError" class="mt-3 text-xs text-rose-300">{{ realtimeError }}</p>
                 </div>
               </div>
             </div>
@@ -888,19 +889,19 @@
                     <h3 class="text-sm font-semibold text-white/90">原始素材</h3>
                     <button type="button" class="btn-ghost text-xs" @click="openPreview('original')">放大查看</button>
                   </div>
-                  <div class="relative mt-4 flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-900/35 px-8 py-6">
+                  <div class="relative mt-4 aspect-video overflow-hidden rounded-2xl border border-white/10 bg-slate-900/35">
                     <img
                       v-if="fileType === 'image'"
                       :src="detectionStore.currentResult.originalUrl"
                       @error="handleImageError($event, '原始图片')"
-                      class="max-h-[420px] w-full object-contain"
+                      class="absolute inset-0 h-full w-full object-contain"
                       alt="原始素材预览"
                     />
                     <video
                       v-else
                       :src="detectionStore.currentResult.originalUrl"
                       controls
-                      class="max-h-[420px] w-full rounded-xl object-contain"
+                      class="absolute inset-0 h-full w-full object-cover"
                     ></video>
                     <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                   </div>
@@ -910,45 +911,45 @@
                     <h3 class="text-sm font-semibold text-white/90">识别结果</h3>
                     <button type="button" class="btn-ghost text-xs" @click="openPreview('result')">放大查看</button>
                   </div>
-                  <div class="relative mt-4 flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-900/35 px-8 py-6">
+                  <div class="relative mt-4 aspect-video overflow-hidden rounded-2xl border border-white/10 bg-slate-900/35">
                     <img
                       v-if="fileType === 'image' || showRealtimeSnapshot"
                       :src="detectionStore.currentResult.resultUrl"
                       @error="handleImageError($event, '结果图片')"
-                      class="max-h-[420px] w-full object-contain"
+                      class="absolute inset-0 h-full w-full object-contain"
                       alt="识别结果预览"
                     />
                     <video
                       v-else
                       :src="detectionStore.currentResult.resultUrl"
                       controls
-                      class="max-h-[420px] w-full rounded-xl object-contain"
+                      class="absolute inset-0 h-full w-full object-cover"
                     ></video>
                     <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                   </div>
                 </div>
               </div>
 
-              <div class="glass-panel p-6">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div class="space-y-2 text-sm text-slate-300/80">
+              <div class="glass-panel p-5">
+                <div class="flex flex-col gap-3">
+                  <div class="grid gap-2 text-sm text-slate-300/80 sm:grid-cols-2 sm:gap-x-8">
                     <p>素材名称：{{ customFileName || selectedFile?.name || detectionStore.currentResult.fileName || '未命名素材' }}</p>
                     <p>置信度阈值：{{ Number(detectionStore.detectionParams.confidence).toFixed(2) }} · IOU：{{ Number(detectionStore.detectionParams.iouThreshold).toFixed(2) }}</p>
                     <p v-if="fileType === 'video'">视频抽帧：每 {{ detectionStore.detectionParams.frameSkip }} 帧分析一次</p>
                     <p v-if="fileType === 'video'">识别模式：{{ isRealtimeResult ? '实时识别' : '批量识别' }}</p>
                     <p v-else>图像尺寸：{{ detectionStore.detectionParams.imgSize }} 像素</p>
                   </div>
-                  <div class="flex flex-wrap items-center gap-3">
-                    <button type="button" class="btn-secondary text-sm" @click="openPreview('both')">对比预览</button>
+                  <div class="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(140px,1fr))]">
+                    <button type="button" class="btn-secondary w-full text-sm" @click="openPreview('both')">对比预览</button>
                     <a
                       v-if="hasRealtimeResultVideo && detectionStore.currentResult.resultDownloadUrl"
                       :href="detectionStore.currentResult.resultDownloadUrl"
-                      class="btn-secondary text-sm"
+                      class="btn-secondary w-full text-sm"
                     >
                       导出视频
                     </a>
-                    <router-link to="/history" class="btn-ghost text-sm">查看历史记录</router-link>
-                    <button type="button" class="btn-primary text-sm" @click="resetAllStates">重新开始</button>
+                    <router-link to="/history" class="btn-secondary w-full text-sm">查看历史记录</router-link>
+                    <button type="button" class="btn-primary w-full text-sm" @click="resetAllStates">重新开始</button>
                   </div>
                 </div>
               </div>
@@ -1277,12 +1278,11 @@
       </div>
     </div>
   </div>
-</div>
 </template>
 
 <script>
 export default {
-  name: 'Dashboard'
+  name: 'Workspace'
 }
 </script>
 
@@ -1291,6 +1291,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useDetectionStore } from '../stores/detection'
 import { supabase } from '../config/supabase'
+import { buildProtectedApiUrl } from '../utils/protected-url'
 
 const authStore = useAuthStore()
 const detectionStore = useDetectionStore()
@@ -1403,12 +1404,40 @@ const loadingWeights = ref(false)
 const selectedWeightId = ref(null)
 const isSelectingWeight = ref(false)
 const showWeightDialog = ref(false)
+const workspaceNotice = ref(null)
+
+const showWorkspaceNotice = (message, type = 'error') => {
+  if (!message) return
+  workspaceNotice.value = {
+    type,
+    message
+  }
+}
+
+const clearWorkspaceNotice = () => {
+  workspaceNotice.value = null
+}
+
+const workspaceNoticeClass = computed(() => {
+  const type = workspaceNotice.value?.type || 'info'
+  if (type === 'warning') {
+    return 'border-amber-500/40 bg-amber-500/10 text-amber-100'
+  }
+  if (type === 'success') {
+    return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+  }
+  if (type === 'info') {
+    return 'border-primary-500/40 bg-primary-500/10 text-primary-100'
+  }
+  return 'border-red-500/40 bg-red-500/10 text-red-100'
+})
 
 const applySelectedFile = (file) => {
   if (!file) return
 
   stopRealtimeDetection()
   resetRealtimeState()
+  clearWorkspaceNotice()
 
   const mime = file.type || ''
   if (mime.startsWith('video')) {
@@ -1418,7 +1447,7 @@ const applySelectedFile = (file) => {
     fileType.value = 'image'
     detectionMode.value = 'batch'
   } else {
-    alert('暂不支持该文件类型，请选择图片或视频')
+    showWorkspaceNotice('暂不支持该文件类型，请选择图片或视频', 'warning')
     return
   }
 
@@ -1478,6 +1507,7 @@ const confirmUploadWeight = async () => {
   showWeightDialog.value = false
   isUploadingModel.value = true
   uploadError.value = null
+  clearWorkspaceNotice()
   
   try {
     const result = await detectionStore.uploadModel(
@@ -1521,6 +1551,7 @@ const reselectModel = () => {
   modelWeightName.value = ''
   modelWeightDescription.value = ''
   uploadError.value = null
+  clearWorkspaceNotice()
   selectedWeightId.value = null
   detectionStore.modelFile = null
   detectionStore.modelUploaded = false
@@ -1548,6 +1579,7 @@ const handleFileDrop = (event) => {
 const clearSelectedFile = () => {
   stopRealtimeDetection()
   resetRealtimeState()
+  clearWorkspaceNotice()
   selectedFile.value = null
   customFileName.value = ''
   isEditingFileName.value = false
@@ -1860,14 +1892,20 @@ const runRealtimeVideoDetection = async (file) => {
       URL.revokeObjectURL(originalVideoObjectUrl)
     }
     originalVideoObjectUrl = URL.createObjectURL(file)
+    const protectedResultUrl = donePacket.resultUrl
+      ? await buildProtectedApiUrl(donePacket.resultUrl)
+      : ''
+    const protectedDownloadUrl = donePacket.downloadUrl
+      ? await buildProtectedApiUrl(donePacket.downloadUrl)
+      : ''
 
     detectionStore.currentResult = {
       success: true,
       realtime: true,
       originalUrl: originalVideoObjectUrl,
-      resultUrl: donePacket.resultUrl ? `${API_URL}${donePacket.resultUrl}` : realtimePreviewUrl.value,
-      resultVideoUrl: donePacket.resultUrl ? `${API_URL}${donePacket.resultUrl}` : '',
-      resultDownloadUrl: donePacket.downloadUrl ? `${API_URL}${donePacket.downloadUrl}` : '',
+      resultUrl: protectedResultUrl || realtimePreviewUrl.value,
+      resultVideoUrl: protectedResultUrl,
+      resultDownloadUrl: protectedDownloadUrl,
       detections: [],
       totalDetections: donePacket.totalDetections || realtimeState.value.totalDetections,
       uniqueTargetCount: donePacket.uniqueTargetCount ?? 0,
@@ -1890,6 +1928,7 @@ const runDetection = async () => {
   if (!selectedFile.value) return
 
   realtimeError.value = ''
+  clearWorkspaceNotice()
   currentStep.value = 4  // 跳转到结果页面
 
   try {
@@ -1903,12 +1942,12 @@ const runDetection = async () => {
 
     const result = await detectionStore.runDetection(selectedFile.value, fileType.value)
     if (!result.success) {
-      alert('识别失败: ' + result.error)
+      showWorkspaceNotice(`识别失败：${result.error || '请稍后重试'}`, 'error')
       currentStep.value = 3  // 识别失败返回参数页面
     }
   } catch (error) {
     realtimeError.value = error.message || '实时识别失败'
-    alert('识别失败: ' + realtimeError.value)
+    showWorkspaceNotice(`识别失败：${realtimeError.value}`, 'error')
     currentStep.value = 3
   }
 }
@@ -1916,7 +1955,7 @@ const runDetection = async () => {
 const handleImageError = (event, type) => {
   console.error(`[ERROR] ${type}加载失败:`, event.target.src)
   console.error('[ERROR] 错误事件:', event)
-  alert(`${type}加载失败，请查看控制台`)
+  showWorkspaceNotice(`${type}加载失败，请检查文件是否仍然可访问`, 'warning')
 }
 
 // 打开预览
@@ -2059,6 +2098,7 @@ const confirmReset = () => {
   showResetDialog.value = false
   stopRealtimeDetection()
   resetRealtimeState()
+  clearWorkspaceNotice()
   
   // 重置本地状态
     clearSelectedFile()
@@ -2139,10 +2179,11 @@ const loadUserWeights = async () => {
 // 选择已有权重
 const selectExistingWeight = async (weight) => {
   isSelectingWeight.value = true
+  clearWorkspaceNotice()
   try {
     const token = (await supabase.auth.getSession()).data.session?.access_token
     if (!token) {
-      alert('未登录，请重新登录')
+      showWorkspaceNotice('未登录，请重新登录', 'error')
       return
     }
 
@@ -2168,7 +2209,7 @@ const selectExistingWeight = async (weight) => {
     }
   } catch (error) {
     console.error('选择权重失败:', error)
-    alert('选择权重失败: ' + error.message)
+    showWorkspaceNotice(`选择权重失败：${error.message}`, 'error')
   } finally {
     isSelectingWeight.value = false
   }

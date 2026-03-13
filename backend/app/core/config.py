@@ -18,6 +18,22 @@ class Settings:
     upload_dir: Path = Path(os.getenv("UPLOAD_DIR", "uploads"))
     model_dir: Path = Path(os.getenv("MODEL_DIR", "models"))
     result_dir: Path = Path(os.getenv("RESULT_DIR", "results"))
+    user_settings_store_file: Path = Path(
+        os.getenv("USER_SETTINGS_STORE_FILE", "runtime/user-settings.json")
+    )
+    local_history_store_file: Path = Path(
+        os.getenv("LOCAL_HISTORY_STORE_FILE", "runtime/history.json")
+    )
+    local_history_retention_days: int = int(
+        os.getenv("LOCAL_HISTORY_RETENTION_DAYS", "30")
+    )
+    local_history_max_records: int = int(
+        os.getenv("LOCAL_HISTORY_MAX_RECORDS", "500")
+    )
+    local_history_cleanup_enabled: bool = os.getenv(
+        "LOCAL_HISTORY_CLEANUP_ENABLED",
+        "true",
+    ).lower() in {"1", "true", "yes", "on"}
     supabase_url: Optional[str] = os.getenv("SUPABASE_URL")
     supabase_key: Optional[str] = os.getenv("SUPABASE_KEY")
     supabase_jwt_secret: Optional[str] = os.getenv("SUPABASE_JWT_SECRET")
@@ -47,7 +63,14 @@ settings = Settings()
 
 
 def ensure_directories() -> None:
-    for directory in [settings.upload_dir, settings.model_dir, settings.result_dir, settings.model_cache_dir]:
+    for directory in [
+        settings.upload_dir,
+        settings.model_dir,
+        settings.result_dir,
+        settings.model_cache_dir,
+        settings.user_settings_store_file.parent,
+        settings.local_history_store_file.parent,
+    ]:
         directory.mkdir(parents=True, exist_ok=True)
 
 

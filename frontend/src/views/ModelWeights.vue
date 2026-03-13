@@ -1,39 +1,20 @@
 <template>
-  <div class="relative min-h-screen overflow-hidden">
-    <!-- 背景 -->
-    <div class="absolute inset-0">
-      <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-black"></div>
-      <div class="absolute inset-0 bg-grid opacity-10"></div>
-      <div class="absolute -top-28 -left-32 h-96 w-96 rounded-full bg-primary-500/30 blur-3xl"></div>
-      <div class="absolute top-1/3 right-[-120px] h-[420px] w-[420px] rounded-full bg-accent-500/20 blur-3xl"></div>
+  <div class="space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p class="section-title">模型管理</p>
+        <h1 data-testid="model-weights-title" class="mt-3 text-2xl font-semibold text-white">模型与权重</h1>
+        <p class="mt-2 text-sm text-slate-300/80">
+          统一管理自定义权重、激活状态与版本描述，确保推理结果一致。
+        </p>
+      </div>
+      <div class="flex items-center gap-3 text-xs text-slate-400/80">
+        当前账户：<span class="text-slate-100">{{ authStore.user?.email || '未登录' }}</span>
+      </div>
     </div>
 
-    <div class="relative z-10 flex min-h-screen flex-col">
-      <!-- 导航栏 -->
-      <nav class="sticky top-0 z-20 border-b border-white/10 bg-white/5 backdrop-blur-xl">
-        <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-6">
-          <div>
-            <span class="pill">YOLOv8 Suite</span>
-            <h1 class="mt-2 text-2xl font-semibold leading-tight text-gradient">
-              模型权重管理
-            </h1>
-          </div>
-          <div class="flex items-center gap-4">
-            <router-link to="/dashboard" class="btn-secondary text-sm">
-              返回控制台
-            </router-link>
-            <router-link to="/history" class="btn-secondary text-sm">
-              历史记录
-            </router-link>
-            <button @click="authStore.logout" class="btn-ghost text-sm">
-              退出登录
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      <!-- 主要内容 -->
-      <div class="flex-1 overflow-y-auto px-6 py-10 lg:px-12">
+    <!-- 主要内容 -->
+    <div class="flex-1 overflow-y-auto px-6 py-10 lg:px-12">
         <div class="mx-auto w-full max-w-6xl space-y-8">
           
           <!-- 上传新权重 -->
@@ -233,7 +214,6 @@
           </div>
         </div>
       </div>
-    </div>
 
     <!-- 权重上传确认弹窗 -->
     <div
@@ -351,7 +331,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../config/supabase'
 
@@ -371,9 +351,30 @@ const deleting = ref(null)
 const deleteConfirmWeight = ref(null)
 const activatingLoading = ref(false)
 const activatingSuccess = ref(false)
+let weightsAbortController = null
+const pendingTimeouts = new Set()
+
+const scheduleTimeout = (callback, delay) => {
+  const id = window.setTimeout(() => {
+    pendingTimeouts.delete(id)
+    callback()
+  }, delay)
+  pendingTimeouts.add(id)
+  return id
+}
+
+const clearPendingTimeouts = () => {
+  pendingTimeouts.forEach(id => window.clearTimeout(id))
+  pendingTimeouts.clear()
+}
 
 // 加载权重列表
 const loadWeights = async () => {
+  if (weightsAbortController) {
+    weightsAbortController.abort()
+  }
+  const controller = new AbortController()
+  weightsAbortController = controller
   loading.value = true
   // 先清空旧数据，防止显示上一个用户的权重
   weights.value = []
@@ -386,7 +387,8 @@ const loadWeights = async () => {
     const response = await fetch(`${import.meta.env.VITE_API_URL}/api/model-weights`, {
       headers: {
         'Authorization': `Bearer ${token}`
-      }
+      },
+      signal: controller.signal
     })
 
     if (!response.ok) {
@@ -394,15 +396,17 @@ const loadWeights = async () => {
     }
 
     const data = await response.json()
-    console.log('📦 API返回的权重数据:', data)
-    console.log('📊 权重列表数量:', data.weights?.length || 0)
+    if (controller.signal.aborted) return
     weights.value = data.weights || []
-    console.log('✅ 已加载到界面的权重数量:', weights.value.length)
   } catch (error) {
+    if (controller.signal.aborted) return
     console.error('加载权重列表失败:', error)
     uploadError.value = error.message
   } finally {
-    loading.value = false
+    if (weightsAbortController === controller) {
+      weightsAbortController = null
+      loading.value = false
+    }
   }
 }
 
@@ -486,16 +490,13 @@ const uploadWeight = async (file) => {
     }
 
     const data = await response.json()
-    console.log('📤 上传响应数据:', data)
     if (data.success) {
-      console.log('✅ 权重上传成功，权重信息:', data.weight)
-      
       // 显示成功状态
       uploadingFile.value = false
       uploadSuccess.value = true
       
       // 2秒后自动关闭弹窗
-      setTimeout(() => {
+      scheduleTimeout(() => {
         uploadSuccess.value = false
       }, 2000)
       
@@ -542,14 +543,12 @@ const activateWeight = async (weightId) => {
     }
 
     const data = await response.json()
-    console.log('✅ 权重激活成功:', data.message)
-    
     // 显示成功状态
     activatingLoading.value = false
     activatingSuccess.value = true
     
     // 2秒后自动关闭弹窗
-    setTimeout(() => {
+    scheduleTimeout(() => {
       activatingSuccess.value = false
     }, 2000)
     
@@ -591,8 +590,6 @@ const deleteWeight = async (weightId) => {
       throw new Error(errorData.detail || '删除失败')
     }
 
-    console.log('✅ 权重删除成功')
-    
     // 关闭确认对话框
     deleteConfirmWeight.value = null
     // 重新加载列表
@@ -637,7 +634,6 @@ const formatDate = (dateString) => {
 watch(() => authStore.user, (newUser, oldUser) => {
   // 当用户发生变化时（登录/退出/切换账户）
   if (newUser?.id !== oldUser?.id) {
-    console.log('👤 用户已切换，清空旧权重列表')
     weights.value = []
     if (newUser) {
       // 有新用户登录，加载新用户的权重
@@ -648,6 +644,14 @@ watch(() => authStore.user, (newUser, oldUser) => {
 
 onMounted(() => {
   loadWeights()
+})
+
+onBeforeUnmount(() => {
+  clearPendingTimeouts()
+  if (weightsAbortController) {
+    weightsAbortController.abort()
+    weightsAbortController = null
+  }
 })
 </script>
 

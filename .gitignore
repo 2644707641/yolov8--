@@ -47,6 +47,18 @@ backend/results/
 *.onnx
 *.weights
 
+# Virtual environment
+.venv/
+
+# IDE
+.trae/
+
+# Runtime & temp files
+runtime/
+*.err
+*.out
+esbuild.exe
+
 # Spec workflow
 .spec-workflow/
 

@@ -18,6 +18,8 @@ ensure_torch_patch()
 
 from ultralytics import YOLO  # noqa: E402
 
+from app.services import system_monitor
+
 DetectionResult = Tuple[Path, List[dict], float, str]
 LiveFrameResult = Tuple[bytes, List[dict], float]
 LiveFrameInferenceResult = Tuple[np.ndarray, List[dict], float]
@@ -167,24 +169,28 @@ async def run_detection(
     result_dir: Path,
     logger,
 ) -> DetectionResult:
-    async with _DETECTION_SEMAPHORE:
-        logger.info(
-            "开始检测: user=%s type=%s file=%s params=%s",
-            user_id,
-            file_type,
-            file_path.name,
-            params,
-        )
-        return await anyio.to_thread.run_sync(
-            _process_detection_sync,
-            user_id,
-            model_path,
-            file_path,
-            file_type,
-            params,
-            result_dir,
-            logger,
-        )
+    system_monitor.increment_active_tasks()
+    try:
+        async with _DETECTION_SEMAPHORE:
+            logger.info(
+                "开始检测: user=%s type=%s file=%s params=%s",
+                user_id,
+                file_type,
+                file_path.name,
+                params,
+            )
+            return await anyio.to_thread.run_sync(
+                _process_detection_sync,
+                user_id,
+                model_path,
+                file_path,
+                file_type,
+                params,
+                result_dir,
+                logger,
+            )
+    finally:
+        system_monitor.decrement_active_tasks()
 
 
 def _process_detection_sync(
