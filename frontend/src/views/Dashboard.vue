@@ -302,7 +302,11 @@
             </div>
 
             <!-- 已有权重列表 -->
-            <div v-if="availableWeights.length > 0" class="mt-8">
+            <div v-if="loadingWeights && availableWeights.length === 0" class="mt-8 flex items-center justify-center gap-3 py-8 text-slate-400">
+              <div class="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+              <span class="text-sm">正在加载权重列表…</span>
+            </div>
+            <div v-else-if="availableWeights.length > 0" class="mt-8">
               <div class="mb-4 flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-white">或选择已有权重</h3>
                 <button
