@@ -284,6 +284,7 @@ def infer_live_frame_sync(
     frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
     if frame is None:
         raise ValueError("无法解码视频帧，请确认输入为有效 JPEG")
+    frame = np.ascontiguousarray(frame)
 
     start_time = time.time()
     use_tracking = getattr(model, "_codex_tracking_enabled", True)
@@ -515,13 +516,24 @@ def _detect_video(
 
 
 def _create_video_writer(result_path, fps, width, height, logger):
-    options = [
-        ("avc1", "H264"),
-        ("H264", "H264"),
-        ("XVID", "XVID"),
-        ("MJPG", "MJPEG"),
-        ("mp4v", "MPEG-4"),
-    ]
+    if sys.platform == "win32":
+        # Windows 上 OpenCV 的 H264 依赖经常受 OpenH264 DLL 版本影响，
+        # 这里优先使用兼容性更稳定的 mp4v，最终仍可由 ffmpeg 转为 H264。
+        options = [
+            ("mp4v", "MPEG-4"),
+            ("MJPG", "MJPEG"),
+            ("XVID", "XVID"),
+            ("avc1", "H264"),
+            ("H264", "H264"),
+        ]
+    else:
+        options = [
+            ("avc1", "H264"),
+            ("H264", "H264"),
+            ("XVID", "XVID"),
+            ("MJPG", "MJPEG"),
+            ("mp4v", "MPEG-4"),
+        ]
 
     for codec_code, codec_name in options:
         try:
