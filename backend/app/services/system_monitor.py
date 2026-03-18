@@ -27,7 +27,7 @@ def get_system_status() -> Dict[str, Any]:
     - error_rate: 错误率 (%)
     """
     memory = psutil.virtual_memory()
-    memory_used_gb = memory.used / (1024 ** 3)
+    memory_used_gb = memory.used / (1024**3)
     memory_percent = memory.percent
 
     gpu_info = _get_gpu_info()
@@ -57,6 +57,7 @@ def _get_gpu_info() -> Dict[str, Any]:
     """
     try:
         import torch
+
         if torch.cuda.is_available():
             device_count = torch.cuda.device_count()
             if device_count > 0:
@@ -64,15 +65,16 @@ def _get_gpu_info() -> Dict[str, Any]:
                 memory_used = 0
                 try:
                     import pynvml
+
                     pynvml.nvmlInit()
                     handle = pynvml.nvmlDeviceGetHandleByIndex(0)
                     util = pynvml.nvmlDeviceGetUtilizationRates(handle)
                     mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
                     utilization = util.gpu
-                    memory_used = mem_info.used / (1024 ** 3)
+                    memory_used = mem_info.used / (1024**3)
                     pynvml.nvmlShutdown()
                 except Exception:
-                    memory_used = torch.cuda.memory_allocated() / (1024 ** 3)
+                    memory_used = torch.cuda.memory_allocated() / (1024**3)
                 return {
                     "utilization": utilization,
                     "memory_used": round(memory_used, 1),

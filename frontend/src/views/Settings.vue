@@ -299,6 +299,26 @@
               <p class="mt-2 text-xs text-slate-400">填写 0 表示不限时</p>
             </div>
           </div>
+          <div class="mt-4 grid gap-4 md:grid-cols-2">
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
+              <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">默认视频源</p>
+              <select v-model="realtimePrefs.sourceMode" class="input-field mt-4">
+                <option value="camera">本机摄像头</option>
+                <option value="network">无线手机流</option>
+              </select>
+              <p class="mt-2 text-xs text-slate-400">无线手机流适用于 RTSP 或 MJPEG/HTTP(S) 地址</p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
+              <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">无线流地址</p>
+              <input
+                v-model.trim="realtimePrefs.networkStreamUrl"
+                type="text"
+                class="input-field mt-4"
+                placeholder="rtsp://192.168.1.8:8554/live"
+              />
+              <p class="mt-2 text-xs text-slate-400">仅在默认视频源为无线手机流时生效</p>
+            </div>
+          </div>
       </div>
 
       <div data-testid="settings-section-system" class="card">
@@ -420,7 +440,9 @@ const storagePolicy = ref({
 const realtimePrefs = ref({
   recordEnabled: true,
   recordFps: 8,
-  recordDurationSeconds: 0
+  recordDurationSeconds: 0,
+  sourceMode: 'camera',
+  networkStreamUrl: ''
 })
 
 const loading = ref(false)
@@ -464,7 +486,9 @@ const normalizeRealtimePrefs = () => {
     ...realtimePrefs.value,
     recordEnabled: Boolean(realtimePrefs.value.recordEnabled),
     recordFps: Math.max(1, Number(realtimePrefs.value.recordFps || 8)),
-    recordDurationSeconds: Math.max(0, Number(realtimePrefs.value.recordDurationSeconds || 0))
+    recordDurationSeconds: Math.max(0, Number(realtimePrefs.value.recordDurationSeconds || 0)),
+    sourceMode: realtimePrefs.value.sourceMode === 'network' ? 'network' : 'camera',
+    networkStreamUrl: String(realtimePrefs.value.networkStreamUrl || '').trim()
   }
 }
 

@@ -12,10 +12,10 @@
         <button
           data-testid="realtime-connect"
           class="btn-secondary text-sm"
-          :disabled="isConnecting || isConnected"
-          @click="connectRealtime"
+          :disabled="isConnecting"
+          @click="isConnected ? disconnectRealtime() : connectRealtime()"
         >
-          {{ isConnected ? '已连接' : (isConnecting ? '连接中…' : '连接实时流') }}
+          {{ isConnecting ? '连接中…' : (isConnected ? '关闭实时流' : '连接实时流') }}
         </button>
         <button
           class="btn-primary text-sm"
@@ -38,6 +38,47 @@
       {{ errorMessage }}
     </div>
 
+    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
+      <div class="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+        <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">视频源</p>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3 text-sm text-slate-200">
+            <input
+              v-model="sourceMode"
+              type="radio"
+              value="camera"
+              name="realtime-source"
+            />
+            本机摄像头
+          </label>
+          <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3 text-sm text-slate-200">
+            <input
+              v-model="sourceMode"
+              data-testid="realtime-source-network"
+              type="radio"
+              value="network"
+              name="realtime-source"
+            />
+            无线手机流
+          </label>
+        </div>
+      </div>
+
+      <div class="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+        <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">无线流地址</p>
+        <input
+          v-model.trim="networkStreamUrl"
+          data-testid="realtime-network-url"
+          type="text"
+          class="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3 text-sm text-white outline-none transition focus:border-primary-400/60"
+          placeholder="rtsp://192.168.1.8:8554/live 或 http://192.168.1.8:8080/video"
+        />
+        <p class="mt-2 text-xs text-slate-400">
+          适用于手机投屏 App 输出的 RTSP 或 MJPEG/HTTP(S) 地址。使用本机摄像头时可留空。
+        </p>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div class="card card--no-glow card--no-blur lg:col-span-2" data-testid="realtime-preview-card">
         <div class="flex items-center justify-between">
@@ -46,15 +87,26 @@
         </div>
         <div class="mt-6 grid gap-4 lg:grid-cols-2">
           <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">原始输入</p>
+            <p class="text-xs uppercase tracking-[0.3em] text-slate-400/70">{{ sourceLabel }}</p>
             <div class="mt-3 flex h-56 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/15 bg-slate-900/40">
               <video
+                v-if="isCameraSource"
                 ref="videoRef"
                 class="h-full w-full object-cover"
                 autoplay
                 muted
                 playsinline
               ></video>
+              <img
+                v-else-if="previewUrl"
+                data-testid="realtime-network-preview"
+                :src="previewUrl"
+                class="h-full w-full object-cover"
+                alt="无线流预览"
+              />
+              <div v-else class="flex h-full w-full items-center justify-center px-6 text-center">
+                <p class="text-xs text-slate-400">连接后将在此显示无线流实时画面</p>
+              </div>
             </div>
           </div>
           <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -98,7 +150,7 @@
           </label>
           <label class="flex items-center justify-between text-xs text-slate-300/80">
             录制帧率
-            <input v-model.number="recordFps" type="number" min="1" step="1" class="w-20 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-right text-xs text-white" />
+            <input v-model.number="recordFps" data-testid="realtime-fps" type="number" min="1" step="1" class="w-20 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-right text-xs text-white" />
           </label>
           <label class="flex items-center justify-between text-xs text-slate-300/80">
             录制时长（秒）
@@ -175,6 +227,14 @@ const recordDurationSeconds = computed({
   get: () => detectionStore.realtimePrefs.recordDurationSeconds,
   set: (value) => detectionStore.updateRealtimePrefs({ recordDurationSeconds: value })
 })
+const sourceMode = computed({
+  get: () => detectionStore.realtimePrefs.sourceMode,
+  set: (value) => detectionStore.updateRealtimePrefs({ sourceMode: value })
+})
+const networkStreamUrl = computed({
+  get: () => detectionStore.realtimePrefs.networkStreamUrl,
+  set: (value) => detectionStore.updateRealtimePrefs({ networkStreamUrl: value })
+})
 const downloadUrl = ref('')
 const pendingStart = ref(false)
 
@@ -189,6 +249,10 @@ const metrics = ref({
 const isConnecting = computed(() => connectionState.value === 'connecting')
 const isConnected = computed(() => ['ready', 'running'].includes(connectionState.value))
 const isRunning = computed(() => connectionState.value === 'running')
+const isCameraSource = computed(() => sourceMode.value !== 'network')
+const sourceLabel = computed(() => (
+  isCameraSource.value ? '原始输入' : '无线流输入'
+))
 const statusLabel = computed(() => {
   if (connectionState.value === 'connecting') return '正在连接'
   if (connectionState.value === 'ready') return '连接就绪'
@@ -197,7 +261,7 @@ const statusLabel = computed(() => {
 })
 
 const events = ref([
-  { title: '等待视频源', desc: '尚未检测到实时推流，请先配置摄像头。', time: '刚刚' },
+  { title: '等待视频源', desc: '尚未检测到实时推流，请先配置摄像头或无线手机流。', time: '刚刚' },
   { title: '推理引擎待命', desc: '模型加载完成后会自动开始识别。', time: '2 分钟前' },
   { title: '系统监控已启用', desc: '实时状态同步中，准备记录事件。', time: '5 分钟前' }
 ])
@@ -246,6 +310,9 @@ const startCamera = async () => {
 const stopCamera = () => {
   if (!stream) return
   stream.getTracks().forEach(track => track.stop())
+  if (videoRef.value) {
+    videoRef.value.srcObject = null
+  }
   stream = null
 }
 
@@ -261,27 +328,46 @@ const detachSocketListeners = () => {
   socketHandlers.error = null
 }
 
-const cleanupRealtime = () => {
-  if (isDisposed) return
-  isDisposed = true
+const resetRealtimeView = () => {
   stopCapture()
   clearRecordTimer()
   stopCamera()
-  if (socket) {
-    detachSocketListeners()
-    try {
-      socket.close()
-    } catch (error) {
-      console.warn('关闭实时连接失败:', error)
-    }
-    socket = null
-  }
   if (lastPreviewUrl) {
     URL.revokeObjectURL(lastPreviewUrl)
     lastPreviewUrl = ''
   }
   previewUrl.value = ''
+  metrics.value = {
+    processedFrames: 0,
+    detectionCount: 0,
+    inferTime: 0,
+    totalDetections: 0,
+    uniqueTargetCount: 0
+  }
   connectionState.value = 'idle'
+}
+
+const closeSocketConnection = () => {
+  if (!socket) return
+  detachSocketListeners()
+  try {
+    socket.close()
+  } catch (error) {
+    console.warn('关闭实时连接失败:', error)
+  }
+  socket = null
+}
+
+const disconnectRealtime = () => {
+  pendingStart.value = false
+  closeSocketConnection()
+  resetRealtimeView()
+}
+
+const cleanupRealtime = () => {
+  if (isDisposed) return
+  isDisposed = true
+  disconnectRealtime()
 }
 
 const connectRealtime = async () => {
@@ -291,7 +377,14 @@ const connectRealtime = async () => {
   downloadUrl.value = ''
 
   try {
-    await startCamera()
+    if (isCameraSource.value) {
+      await startCamera()
+    } else {
+      stopCamera()
+      if (!networkStreamUrl.value) {
+        throw new Error('请输入无线手机流地址')
+      }
+    }
     const token = await getAuthToken()
     const wsUrl = buildWsUrl(token)
     socket = new WebSocket(wsUrl)
@@ -299,6 +392,11 @@ const connectRealtime = async () => {
 
     socketHandlers.open = () => {
       if (isDisposed) return
+      if (!isCameraSource.value) {
+        pendingStart.value = false
+        startDetection()
+        return
+      }
       connectionState.value = 'ready'
       if (pendingStart.value) {
         pendingStart.value = false
@@ -313,15 +411,14 @@ const connectRealtime = async () => {
 
     socketHandlers.close = () => {
       if (isDisposed) return
-      connectionState.value = 'idle'
-      stopCapture()
+      disconnectRealtime()
     }
 
     socketHandlers.error = () => {
       if (isDisposed) return
       errorMessage.value = '实时连接失败，请检查服务状态'
+      disconnectRealtime()
       connectionState.value = 'error'
-      stopCapture()
     }
 
     socket.addEventListener('open', socketHandlers.open)
@@ -353,6 +450,12 @@ const startDetection = async () => {
   socket.send(JSON.stringify({
     type: 'start',
     params: detectionStore.detectionParams,
+    source: isCameraSource.value
+      ? { type: 'camera' }
+      : {
+          type: 'network',
+          url: networkStreamUrl.value
+        },
     recording: {
       enabled: recordEnabled.value,
       fps: recordFps.value,
@@ -360,7 +463,9 @@ const startDetection = async () => {
     }
   }))
 
-  startCapture()
+  if (isCameraSource.value) {
+    startCapture()
+  }
   scheduleRecordStop()
 }
 
@@ -446,7 +551,9 @@ const handleSocketMessage = async (event) => {
     if (typeof event.data === 'string') {
       const payload = JSON.parse(event.data)
       if (payload.type === 'ready') {
-        connectionState.value = 'ready'
+        if (connectionState.value !== 'running') {
+          connectionState.value = 'ready'
+        }
         return
       }
       if (payload.type === 'error') {
@@ -490,6 +597,7 @@ const handleSocketMessage = async (event) => {
       totalDetections: meta.totalDetections || 0,
       uniqueTargetCount: meta.uniqueTargetCount || 0
     }
+    connectionState.value = 'running'
   } catch (error) {
     console.warn('实时消息解析失败:', error)
   }

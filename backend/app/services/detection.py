@@ -57,7 +57,9 @@ def build_result_metrics(detections: List[dict], file_type: str) -> Dict[str, An
 
     for det in detections:
         class_name = det.get("class", "未知")
-        cumulative_class_counts[class_name] = cumulative_class_counts.get(class_name, 0) + 1
+        cumulative_class_counts[class_name] = (
+            cumulative_class_counts.get(class_name, 0) + 1
+        )
 
         frame_idx = det.get("frame")
         if isinstance(frame_idx, int):
@@ -70,7 +72,9 @@ def build_result_metrics(detections: List[dict], file_type: str) -> Dict[str, An
             track_ids_by_class.setdefault(class_name, set()).add(str(track_id))
 
     total_detections = len(detections)
-    max_targets_per_frame = max(frame_counts.values()) if frame_counts else total_detections
+    max_targets_per_frame = (
+        max(frame_counts.values()) if frame_counts else total_detections
+    )
 
     if track_ids_by_class:
         unique_class_counts = {
@@ -144,7 +148,9 @@ def _generate_description(detections: List[dict], file_type: str) -> str:
 
     if class_counts:
         class_details = []
-        for class_name, count in sorted(class_counts.items(), key=lambda x: x[1], reverse=True):
+        for class_name, count in sorted(
+            class_counts.items(), key=lambda x: x[1], reverse=True
+        ):
             class_details.append(f"{count} 个{class_name}")
         description_parts.append("，其中包括 " + "、".join(class_details))
 
@@ -284,6 +290,24 @@ def infer_live_frame_sync(
     frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
     if frame is None:
         raise ValueError("无法解码视频帧，请确认输入为有效 JPEG")
+    return infer_live_array_sync(
+        model=model,
+        frame=frame,
+        detection_params=detection_params,
+    )
+
+
+def infer_live_array_sync(
+    *,
+    model: YOLO,
+    frame: np.ndarray,
+    detection_params: Dict,
+) -> LiveFrameInferenceResult:
+    """
+    对 OpenCV 帧矩阵进行实时推理，返回标注帧矩阵、检测结果与耗时。
+    """
+    if frame is None or getattr(frame, "size", 0) == 0:
+        raise ValueError("无线视频流帧无效")
     frame = np.ascontiguousarray(frame)
 
     start_time = time.time()

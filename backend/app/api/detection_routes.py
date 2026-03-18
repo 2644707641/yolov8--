@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Optional
@@ -33,7 +34,7 @@ from app.api.common import (
     settings,
     storage_service,
 )
-from app.services import validators
+from app.services import live_runtime_stats, live_stream, validators
 
 router = APIRouter()
 
@@ -181,7 +182,12 @@ async def detect(
                 detail="请先上传模型文件或确保默认权重已配置",
             )
 
-        result_path, detections, elapsed, description = await detection_service.run_detection(
+        (
+            result_path,
+            detections,
+            elapsed,
+            description,
+        ) = await detection_service.run_detection(
             user_id=user_id,
             model_path=model_path,
             file_path=input_path,
@@ -272,6 +278,39 @@ async def detect(
         storage_service.remove_file(input_path, logger)
 
 
+def _summarize_live_counts(
+    unique_track_ids_by_class: dict[str, dict[str, float]],
+    peak_class_counts: dict[str, int],
+    peak_targets_per_frame: int,
+):
+    if unique_track_ids_by_class:
+        return live_runtime_stats.summarize_live_track_counts(unique_track_ids_by_class)
+
+    class_counts_output = dict(
+        sorted(
+            peak_class_counts.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+    )
+    return class_counts_output, peak_targets_per_frame, "frame_peak"
+
+
+async def _receive_live_message(websocket: WebSocket, timeout: float | None = None):
+    if timeout is None:
+        return await websocket.receive()
+
+    try:
+        return await asyncio.wait_for(websocket.receive(), timeout=timeout)
+    except asyncio.TimeoutError:
+        return None
+
+
+def _build_live_frame_payload(frame_meta: dict, annotated_bytes: bytes) -> bytes:
+    meta_bytes = json.dumps(frame_meta, ensure_ascii=False).encode("utf-8")
+    return len(meta_bytes).to_bytes(4, "big") + meta_bytes + annotated_bytes
+
+
 @router.websocket("/ws/detect-live")
 async def detect_live(websocket: WebSocket):
     await websocket.accept()
@@ -293,6 +332,8 @@ async def detect_live(websocket: WebSocket):
 
     model = None
     detection_params = None
+    live_source = {"type": "camera"}
+    stream_capture = None
     processed_frames = 0
     total_detections = 0
     frame_index = 0
@@ -301,167 +342,326 @@ async def detect_live(websocket: WebSocket):
     record_path = None
     record_writer = None
     peak_targets_per_frame = 0
-    unique_track_ids_by_class: dict[str, set[str]] = {}
+    unique_track_ids_by_class = {}
     peak_class_counts: dict[str, int] = {}
-    class_counts_output: dict[str, int] = {}
-    count_mode = "frame_peak"
+    stream_read_failures = 0
 
     try:
         while True:
-            message = await websocket.receive()
-            message_type = message.get("type")
-            if message_type == "websocket.disconnect":
-                break
+            if (
+                model is not None
+                and detection_params is not None
+                and live_source.get("type") == "network"
+            ):
+                message = await _receive_live_message(websocket, timeout=0.01)
+                if message is not None:
+                    message_type = message.get("type")
+                    if message_type == "websocket.disconnect":
+                        break
 
-            text_payload = message.get("text")
-            frame_bytes = message.get("bytes")
+                    text_payload = message.get("text")
+                    if text_payload is not None:
+                        try:
+                            payload = json.loads(text_payload)
+                        except json.JSONDecodeError:
+                            await websocket.send_json(
+                                {
+                                    "type": "error",
+                                    "detail": "消息格式错误，仅支持 JSON 控制消息",
+                                }
+                            )
+                            continue
 
-            if text_payload is not None:
+                        if payload.get("type") == "end":
+                            result_url = None
+                            download_url = None
+                            if record_writer is not None:
+                                record_writer.release()
+                                record_writer = None
+
+                            if (
+                                record_path
+                                and record_path.exists()
+                                and record_path.stat().st_size > 0
+                            ):
+                                detection_service.optimize_video_file_sync(
+                                    record_path, logger
+                                )
+                                result_url = f"/api/results/{record_path.name}"
+                                download_url = (
+                                    f"/api/results/{record_path.name}?download=1"
+                                )
+
+                            class_counts_output, unique_target_count, count_mode = (
+                                live_runtime_stats.prune_live_track_registry(
+                                    unique_track_ids_by_class,
+                                    now_monotonic=time.monotonic(),
+                                )
+                                or _summarize_live_counts(
+                                    unique_track_ids_by_class,
+                                    peak_class_counts,
+                                    peak_targets_per_frame,
+                                )
+                            )
+
+                            await websocket.send_json(
+                                {
+                                    "type": "done",
+                                    "processedFrames": processed_frames,
+                                    "totalDetections": total_detections,
+                                    "uniqueTargetCount": unique_target_count,
+                                    "classCounts": class_counts_output,
+                                    "countMode": count_mode,
+                                    "maxTargetsPerFrame": peak_targets_per_frame,
+                                    "resultUrl": result_url,
+                                    "downloadUrl": download_url,
+                                    "description": (
+                                        f"实时识别完成，共处理 {processed_frames} 帧，"
+                                        f"{'估计独立目标' if count_mode == 'tracking_unique' else '单帧峰值目标'} "
+                                        f"{unique_target_count} 个，累计检测框 {total_detections} 个。"
+                                    ),
+                                }
+                            )
+                            await websocket.close(code=1000)
+                            return
+
+                frame = await anyio.to_thread.run_sync(
+                    lambda: live_stream.read_network_frame_sync(stream_capture)
+                )
+                if frame is None:
+                    stream_read_failures += 1
+                    if stream_read_failures >= 12:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "detail": "无线视频流中断，请检查手机推流状态",
+                            }
+                        )
+                        await websocket.close(code=1011)
+                        return
+                    await anyio.sleep(0.05)
+                    continue
+
+                stream_read_failures = 0
+                frame_index += 1
                 try:
-                    payload = json.loads(text_payload)
-                except json.JSONDecodeError:
+                    (
+                        annotated_frame,
+                        detections,
+                        elapsed,
+                    ) = await anyio.to_thread.run_sync(
+                        lambda: detection_service.infer_live_array_sync(
+                            model=model,
+                            frame=frame,
+                            detection_params=detection_params,
+                        )
+                    )
+                    annotated_bytes = await anyio.to_thread.run_sync(
+                        detection_service.encode_frame_to_jpeg_sync,
+                        annotated_frame,
+                        80,
+                    )
+                except Exception as exc:
+                    logger.warning("无线流帧处理失败: user=%s err=%s", user_id, exc)
                     await websocket.send_json(
                         {
                             "type": "error",
-                            "detail": "消息格式错误，仅支持 JSON 控制消息",
+                            "detail": f"帧处理失败: {exc}",
+                        }
+                    )
+                    continue
+            else:
+                message = await websocket.receive()
+                message_type = message.get("type")
+                if message_type == "websocket.disconnect":
+                    break
+
+                text_payload = message.get("text")
+                frame_bytes = message.get("bytes")
+
+                if text_payload is not None:
+                    try:
+                        payload = json.loads(text_payload)
+                    except json.JSONDecodeError:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "detail": "消息格式错误，仅支持 JSON 控制消息",
+                            }
+                        )
+                        continue
+
+                    command = payload.get("type")
+                    if command == "start":
+                        params = payload.get("params", {})
+                        recording = payload.get("recording", {}) or {}
+                        live_source = live_stream.normalize_live_source(
+                            payload.get("source")
+                        )
+                        detection_params = detection_service.normalize_params(params)
+                        model_path = await resolve_model_path(user_id, supabase_client)
+
+                        if not model_path:
+                            await websocket.send_json(
+                                {
+                                    "type": "error",
+                                    "detail": "请先上传模型文件或确保默认权重已配置",
+                                }
+                            )
+                            await websocket.close(code=4400)
+                            return
+
+                        model = await anyio.to_thread.run_sync(
+                            detection_service.load_model_sync, model_path
+                        )
+                        record_enabled = bool(recording.get("enabled", False))
+                        record_fps = float(recording.get("fps", 8.0) or 8.0)
+                        if record_fps <= 0:
+                            record_fps = 8.0
+                        record_path = None
+                        stream_read_failures = 0
+                        if record_writer is not None:
+                            record_writer.release()
+                        record_writer = None
+                        if stream_capture is not None:
+                            stream_capture.release()
+                            stream_capture = None
+
+                        if live_source["type"] == "network":
+                            try:
+                                stream_capture = await anyio.to_thread.run_sync(
+                                    lambda: live_stream.open_network_capture_sync(
+                                        live_source["url"]
+                                    )
+                                )
+                            except Exception as exc:
+                                logger.warning(
+                                    "无线流连接失败: user=%s url=%s err=%s",
+                                    user_id,
+                                    live_source["url"],
+                                    exc,
+                                )
+                                await websocket.send_json(
+                                    {
+                                        "type": "error",
+                                        "detail": str(exc),
+                                    }
+                                )
+                                await websocket.close(code=1011)
+                                return
+
+                        logger.info(
+                            "实时检测模型加载成功: user=%s model=%s source=%s",
+                            user_id,
+                            model_path,
+                            live_source["type"],
+                        )
+                        await websocket.send_json(
+                            {
+                                "type": "ready",
+                                "message": "实时识别已启动",
+                                "sourceType": live_source["type"],
+                            }
+                        )
+                    elif command == "end":
+                        result_url = None
+                        download_url = None
+                        if record_writer is not None:
+                            record_writer.release()
+                            record_writer = None
+
+                        if (
+                            record_path
+                            and record_path.exists()
+                            and record_path.stat().st_size > 0
+                        ):
+                            detection_service.optimize_video_file_sync(
+                                record_path, logger
+                            )
+                            result_url = f"/api/results/{record_path.name}"
+                            download_url = f"/api/results/{record_path.name}?download=1"
+
+                        class_counts_output, unique_target_count, count_mode = (
+                            live_runtime_stats.prune_live_track_registry(
+                                unique_track_ids_by_class,
+                                now_monotonic=time.monotonic(),
+                            )
+                            or _summarize_live_counts(
+                                unique_track_ids_by_class,
+                                peak_class_counts,
+                                peak_targets_per_frame,
+                            )
+                        )
+
+                        await websocket.send_json(
+                            {
+                                "type": "done",
+                                "processedFrames": processed_frames,
+                                "totalDetections": total_detections,
+                                "uniqueTargetCount": unique_target_count,
+                                "classCounts": class_counts_output,
+                                "countMode": count_mode,
+                                "maxTargetsPerFrame": peak_targets_per_frame,
+                                "resultUrl": result_url,
+                                "downloadUrl": download_url,
+                                "description": (
+                                    f"实时识别完成，共处理 {processed_frames} 帧，"
+                                    f"{'估计独立目标' if count_mode == 'tracking_unique' else '单帧峰值目标'} "
+                                    f"{unique_target_count} 个，累计检测框 {total_detections} 个。"
+                                ),
+                            }
+                        )
+                        await websocket.close(code=1000)
+                        return
+                    continue
+
+                if frame_bytes is None:
+                    continue
+
+                if model is None or detection_params is None:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "detail": "会话未初始化，请先发送 start 消息",
                         }
                     )
                     continue
 
-                command = payload.get("type")
-                if command == "start":
-                    params = payload.get("params", {})
-                    recording = payload.get("recording", {}) or {}
-                    detection_params = detection_service.normalize_params(params)
-                    model_path = await resolve_model_path(user_id, supabase_client)
-
-                    if not model_path:
-                        await websocket.send_json(
-                            {
-                                "type": "error",
-                                "detail": "请先上传模型文件或确保默认权重已配置",
-                            }
+                frame_index += 1
+                try:
+                    (
+                        annotated_frame,
+                        detections,
+                        elapsed,
+                    ) = await anyio.to_thread.run_sync(
+                        lambda: detection_service.infer_live_frame_sync(
+                            model=model,
+                            frame_bytes=frame_bytes,
+                            detection_params=detection_params,
                         )
-                        await websocket.close(code=4400)
-                        return
-
-                    model = await anyio.to_thread.run_sync(
-                        detection_service.load_model_sync, model_path
                     )
-                    record_enabled = bool(recording.get("enabled", False))
-                    record_fps = float(recording.get("fps", 8.0) or 8.0)
-                    if record_fps <= 0:
-                        record_fps = 8.0
-                    record_path = None
-                    if record_writer is not None:
-                        record_writer.release()
-                    record_writer = None
-
-                    logger.info("实时检测模型加载成功: user=%s model=%s", user_id, model_path)
+                    annotated_bytes = await anyio.to_thread.run_sync(
+                        detection_service.encode_frame_to_jpeg_sync,
+                        annotated_frame,
+                        80,
+                    )
+                except Exception as exc:
+                    logger.warning("实时检测帧处理失败: user=%s err=%s", user_id, exc)
                     await websocket.send_json(
                         {
-                            "type": "ready",
-                            "message": "实时识别已启动",
+                            "type": "error",
+                            "detail": f"帧处理失败: {exc}",
                         }
                     )
-                elif command == "end":
-                    result_url = None
-                    download_url = None
-                    if record_writer is not None:
-                        record_writer.release()
-                        record_writer = None
-
-                    if record_path and record_path.exists() and record_path.stat().st_size > 0:
-                        detection_service.optimize_video_file_sync(record_path, logger)
-                        result_url = f"/api/results/{record_path.name}"
-                        download_url = f"/api/results/{record_path.name}?download=1"
-
-                    if unique_track_ids_by_class:
-                        class_counts_output = dict(
-                            sorted(
-                                (
-                                    (class_name, len(track_ids))
-                                    for class_name, track_ids in unique_track_ids_by_class.items()
-                                ),
-                                key=lambda item: item[1],
-                                reverse=True,
-                            )
-                        )
-                        unique_target_count = sum(class_counts_output.values())
-                        count_mode = "tracking_unique"
-                    else:
-                        class_counts_output = dict(
-                            sorted(
-                                peak_class_counts.items(),
-                                key=lambda item: item[1],
-                                reverse=True,
-                            )
-                        )
-                        unique_target_count = peak_targets_per_frame
-                        count_mode = "frame_peak"
-
-                    await websocket.send_json(
-                        {
-                            "type": "done",
-                            "processedFrames": processed_frames,
-                            "totalDetections": total_detections,
-                            "uniqueTargetCount": unique_target_count,
-                            "classCounts": class_counts_output,
-                            "countMode": count_mode,
-                            "maxTargetsPerFrame": peak_targets_per_frame,
-                            "resultUrl": result_url,
-                            "downloadUrl": download_url,
-                            "description": (
-                                f"实时识别完成，共处理 {processed_frames} 帧，"
-                                f"{'估计独立目标' if count_mode == 'tracking_unique' else '单帧峰值目标'} "
-                                f"{unique_target_count} 个，累计检测框 {total_detections} 个。"
-                            ),
-                        }
-                    )
-                    await websocket.close(code=1000)
-                    return
-                continue
-
-            if frame_bytes is None:
-                continue
-
-            if model is None or detection_params is None:
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "detail": "会话未初始化，请先发送 start 消息",
-                    }
-                )
-                continue
-
-            frame_index += 1
-            try:
-                annotated_frame, detections, elapsed = await anyio.to_thread.run_sync(
-                    lambda: detection_service.infer_live_frame_sync(
-                        model=model,
-                        frame_bytes=frame_bytes,
-                        detection_params=detection_params,
-                    )
-                )
-                annotated_bytes = await anyio.to_thread.run_sync(
-                    detection_service.encode_frame_to_jpeg_sync,
-                    annotated_frame,
-                    80,
-                )
-            except Exception as exc:
-                logger.warning("实时检测帧处理失败: user=%s err=%s", user_id, exc)
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "detail": f"帧处理失败: {exc}",
-                    }
-                )
-                continue
+                    continue
 
             if record_enabled:
                 if record_writer is None:
                     h, w = annotated_frame.shape[:2]
-                    record_path = settings.result_dir / f"live_result_{user_id}_{int(time.time())}.mp4"
+                    record_path = (
+                        settings.result_dir
+                        / f"live_result_{user_id}_{int(time.time())}.mp4"
+                    )
                     writer, codec = detection_service.create_video_writer_sync(
                         result_path=record_path,
                         fps=record_fps,
@@ -470,7 +670,9 @@ async def detect_live(websocket: WebSocket):
                         logger=logger,
                     )
                     if writer is None:
-                        logger.warning("实时录制初始化失败，自动关闭录制: user=%s", user_id)
+                        logger.warning(
+                            "实时录制初始化失败，自动关闭录制: user=%s", user_id
+                        )
                         record_enabled = False
                     else:
                         logger.info(
@@ -489,7 +691,13 @@ async def detect_live(websocket: WebSocket):
             total_detections += len(detections)
             peak_targets_per_frame = max(peak_targets_per_frame, len(detections))
 
+            live_runtime_stats.prune_live_track_registry(
+                unique_track_ids_by_class,
+                now_monotonic=time.monotonic(),
+            )
+
             current_frame_class_counts: dict[str, int] = {}
+            frame_now_monotonic = time.monotonic()
             for det in detections:
                 class_name = det.get("class", "未知")
                 current_frame_class_counts[class_name] = (
@@ -498,8 +706,11 @@ async def detect_live(websocket: WebSocket):
 
                 track_id = det.get("track_id")
                 if track_id is not None:
-                    unique_track_ids_by_class.setdefault(class_name, set()).add(
-                        str(track_id)
+                    live_runtime_stats.track_live_detection(
+                        unique_track_ids_by_class,
+                        class_name=class_name,
+                        track_id=str(track_id),
+                        now_monotonic=frame_now_monotonic,
                     )
 
             for class_name, frame_count_value in current_frame_class_counts.items():
@@ -507,30 +718,13 @@ async def detect_live(websocket: WebSocket):
                 if frame_count_value > previous:
                     peak_class_counts[class_name] = frame_count_value
 
-            if unique_track_ids_by_class:
-                class_counts_output = dict(
-                    sorted(
-                        (
-                            (class_name, len(track_ids))
-                            for class_name, track_ids in unique_track_ids_by_class.items()
-                        ),
-                        key=lambda item: item[1],
-                        reverse=True,
-                    )
+            class_counts_output, unique_target_count, count_mode = (
+                _summarize_live_counts(
+                    unique_track_ids_by_class,
+                    peak_class_counts,
+                    peak_targets_per_frame,
                 )
-                unique_target_count = sum(class_counts_output.values())
-                count_mode = "tracking_unique"
-            else:
-                class_counts_output = dict(
-                    sorted(
-                        peak_class_counts.items(),
-                        key=lambda item: item[1],
-                        reverse=True,
-                    )
-                )
-                unique_target_count = peak_targets_per_frame
-                count_mode = "frame_peak"
-
+            )
             frame_meta = {
                 "type": "frame",
                 "frameIndex": frame_index,
@@ -543,9 +737,9 @@ async def detect_live(websocket: WebSocket):
                 "countMode": count_mode,
                 "maxTargetsPerFrame": peak_targets_per_frame,
             }
-            meta_bytes = json.dumps(frame_meta, ensure_ascii=False).encode("utf-8")
-            payload = len(meta_bytes).to_bytes(4, "big") + meta_bytes + annotated_bytes
-            await websocket.send_bytes(payload)
+            await websocket.send_bytes(
+                _build_live_frame_payload(frame_meta, annotated_bytes)
+            )
     except WebSocketDisconnect:
         logger.info("实时检测连接断开: user=%s", user_id)
     except Exception as exc:
@@ -556,6 +750,11 @@ async def detect_live(websocket: WebSocket):
         except Exception:
             pass
     finally:
+        if stream_capture is not None:
+            try:
+                stream_capture.release()
+            except Exception:
+                pass
         if record_writer is not None:
             try:
                 record_writer.release()

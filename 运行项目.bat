@@ -34,7 +34,7 @@ if errorlevel 1 (
 call :is_port_listening 8000
 if errorlevel 1 (
   echo [START] Backend: http://127.0.0.1:8000
-  start "backend-dev" powershell.exe -NoExit -Command "Set-Location '%BACKEND_DIR%'; & '%BACKEND_PYTHON%' -m uvicorn main:app --host 127.0.0.1 --port 8000"
+  start "backend-dev" powershell.exe -NoExit -Command "Set-Location '%BACKEND_DIR%'; & '%BACKEND_PYTHON%' -m uvicorn main:app --host 0.0.0.0 --port 8000"
 ) else (
   echo [SKIP] Port 8000 is already in use.
 )
@@ -42,15 +42,16 @@ if errorlevel 1 (
 call :is_port_listening 5173
 if errorlevel 1 (
   echo [START] Frontend: http://127.0.0.1:5173
-  start "frontend-dev" powershell.exe -NoExit -Command "Set-Location '%FRONTEND_DIR%'; pnpm dev --host 127.0.0.1 --port 5173"
+  start "frontend-dev" powershell.exe -NoExit -Command "Set-Location '%FRONTEND_DIR%'; pnpm dev --host 0.0.0.0 --port 5173"
 ) else (
   echo [SKIP] Port 5173 is already in use.
 )
 
 echo.
 echo Launch request processed.
-echo Frontend: http://127.0.0.1:5173
-echo Backend:  http://127.0.0.1:8000
+echo Frontend local: http://127.0.0.1:5173
+echo Backend local:  http://127.0.0.1:8000
+echo LAN access: use this computer's IP, e.g. http://192.168.x.x:5173
 exit /b 0
 
 :is_port_listening
