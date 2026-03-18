@@ -119,6 +119,34 @@ describe('Settings', () => {
     expect(wrapper.text()).toContain('尚未执行')
   })
 
+  it('按照优先级将四个设置区块纵向排列并弱化概览区', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        settings: {}
+      })
+    })
+
+    const wrapper = mount(Settings)
+    await flushPromises()
+
+    const overviewStrip = wrapper.get('[data-testid="settings-overview-strip"]')
+    const stack = wrapper.get('[data-testid="settings-priority-stack"]')
+    const sections = stack.findAll('[data-testid^="settings-section-"]')
+
+    expect(overviewStrip.classes()).toContain('grid')
+    expect(stack.classes()).toContain('space-y-6')
+    expect(sections).toHaveLength(4)
+    expect(sections[0].attributes('data-testid')).toBe('settings-section-defaults')
+    expect(sections[1].attributes('data-testid')).toBe('settings-section-storage')
+    expect(sections[2].attributes('data-testid')).toBe('settings-section-realtime')
+    expect(sections[3].attributes('data-testid')).toBe('settings-section-system')
+    expect(wrapper.find('[data-testid="settings-storage-config-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="settings-storage-status-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="settings-bottom-actions"]').exists()).toBe(true)
+  })
+
   it('保存时提交本地清理策略配置', async () => {
     const loadPayload = {
       success: true,
