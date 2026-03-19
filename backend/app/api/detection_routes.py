@@ -345,6 +345,7 @@ async def detect_live(websocket: WebSocket):
     unique_track_ids_by_class = {}
     peak_class_counts: dict[str, int] = {}
     stream_read_failures = 0
+    frame_errors = 0
 
     try:
         while True:
@@ -424,6 +425,13 @@ async def detect_live(websocket: WebSocket):
                             )
                             await websocket.close(code=1000)
                             return
+                        elif payload.get("type") == "setConf":
+                            new_conf = payload.get("confidence")
+                            if new_conf is not None and detection_params is not None:
+                                detection_params["confidence"] = max(
+                                    0.01, min(1.0, float(new_conf))
+                                )
+                            continue
 
                 frame = await anyio.to_thread.run_sync(
                     lambda: live_stream.read_network_frame_sync(stream_capture)
@@ -463,6 +471,7 @@ async def detect_live(websocket: WebSocket):
                     )
                 except Exception as exc:
                     logger.warning("无线流帧处理失败: user=%s err=%s", user_id, exc)
+                    frame_errors += 1
                     await websocket.send_json(
                         {
                             "type": "error",
@@ -613,6 +622,12 @@ async def detect_live(websocket: WebSocket):
                         )
                         await websocket.close(code=1000)
                         return
+                    elif command == "setConf":
+                        new_conf = payload.get("confidence")
+                        if new_conf is not None and detection_params is not None:
+                            detection_params["confidence"] = max(
+                                0.01, min(1.0, float(new_conf))
+                            )
                     continue
 
                 if frame_bytes is None:
@@ -647,6 +662,7 @@ async def detect_live(websocket: WebSocket):
                     )
                 except Exception as exc:
                     logger.warning("实时检测帧处理失败: user=%s err=%s", user_id, exc)
+                    frame_errors += 1
                     await websocket.send_json(
                         {
                             "type": "error",
@@ -725,6 +741,11 @@ async def detect_live(websocket: WebSocket):
                     peak_targets_per_frame,
                 )
             )
+            avg_confidence = (
+                sum(d["confidence"] for d in detections) / len(detections)
+                if detections
+                else 0.0
+            )
             frame_meta = {
                 "type": "frame",
                 "frameIndex": frame_index,
@@ -736,6 +757,8 @@ async def detect_live(websocket: WebSocket):
                 "classCounts": class_counts_output,
                 "countMode": count_mode,
                 "maxTargetsPerFrame": peak_targets_per_frame,
+                "avgConfidence": round(avg_confidence, 4),
+                "frameErrors": frame_errors,
             }
             await websocket.send_bytes(
                 _build_live_frame_payload(frame_meta, annotated_bytes)
