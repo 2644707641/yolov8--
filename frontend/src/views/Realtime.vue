@@ -108,9 +108,33 @@
       >
         <div class="flex items-center justify-between">
           <h2 class="text-xl font-semibold text-white">实时画面预览</h2>
-          <span class="text-sm text-slate-400">{{ statusLabel }}</span>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-slate-400">{{ statusLabel }}</span>
+            <button
+              class="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 hover:text-white"
+              title="全屏放大对比"
+              @click="showCompareModal = true"
+            >
+              <svg
+                class="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                />
+              </svg>
+              全屏对比
+            </button>
+          </div>
         </div>
-        <div class="mt-5 grid gap-4 lg:grid-cols-2">
+        <p class="mt-2 text-xs text-slate-500">滚轮缩放 · 拖拽平移</p>
+        <div class="mt-4 grid gap-4 lg:grid-cols-2">
+          <!-- 左面板：原始输入 -->
           <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
             <p
               class="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-slate-400/80"
@@ -118,33 +142,57 @@
               {{ sourceLabel }}
             </p>
             <div
-              class="flex h-72 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/15 bg-slate-900/40"
+              :ref="
+                (el) => {
+                  leftPZ.containerRef.value = el;
+                }
+              "
+              class="relative h-72 overflow-hidden rounded-2xl border border-dashed border-white/15 bg-slate-900/40"
+              :class="leftPZ.cursorClass.value"
+              @mousedown="leftPZ.onMousedown"
+              @mousemove="leftPZ.onMousemove"
+              @mouseup="leftPZ.stopDrag"
+              @mouseleave="leftPZ.stopDrag"
             >
-              <video
-                v-if="isCameraSource"
-                ref="videoRef"
-                class="h-full w-full object-cover"
-                autoplay
-                muted
-                playsinline
-              ></video>
-              <img
-                v-else-if="previewUrl"
-                data-testid="realtime-network-preview"
-                :src="previewUrl"
-                class="h-full w-full object-cover"
-                alt="无线流预览"
-              />
-              <div
-                v-else
-                class="flex h-full w-full items-center justify-center px-6 text-center"
-              >
-                <p class="text-sm text-slate-400">
-                  连接后将在此显示无线流实时画面
-                </p>
+              <!-- 缩放倍率角标 -->
+              <transition name="fade-badge">
+                <span
+                  v-if="leftPZ.zoomLabel.value"
+                  class="pointer-events-none absolute right-2 top-2 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-xs tabular-nums text-white/80 backdrop-blur-sm"
+                >
+                  {{ leftPZ.zoomLabel.value }}
+                </span>
+              </transition>
+              <!-- 可变换内容层 -->
+              <div class="h-full w-full" :style="leftPZ.transformStyle.value">
+                <video
+                  v-if="isCameraSource"
+                  ref="videoRef"
+                  class="h-full w-full object-cover"
+                  autoplay
+                  muted
+                  playsinline
+                ></video>
+                <img
+                  v-else-if="previewUrl"
+                  data-testid="realtime-network-preview"
+                  :src="previewUrl"
+                  class="h-full w-full object-cover"
+                  alt="无线流预览"
+                />
+                <div
+                  v-else
+                  class="flex h-full w-full items-center justify-center px-6 text-center"
+                >
+                  <p class="text-sm text-slate-400">
+                    连接后将在此显示无线流实时画面
+                  </p>
+                </div>
               </div>
             </div>
           </div>
+
+          <!-- 右面板：识别输出 -->
           <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
             <p
               class="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-slate-400/80"
@@ -152,19 +200,261 @@
               识别输出
             </p>
             <div
-              class="flex h-72 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/15 bg-slate-900/40"
+              :ref="
+                (el) => {
+                  rightPZ.containerRef.value = el;
+                }
+              "
+              class="relative h-72 overflow-hidden rounded-2xl border border-dashed border-white/15 bg-slate-900/40"
+              :class="rightPZ.cursorClass.value"
+              @mousedown="rightPZ.onMousedown"
+              @mousemove="rightPZ.onMousemove"
+              @mouseup="rightPZ.stopDrag"
+              @mouseleave="rightPZ.stopDrag"
             >
-              <img
-                v-if="previewUrl"
-                :src="previewUrl"
-                class="h-full w-full object-cover"
-                alt="识别结果"
-              />
-              <span v-else class="text-sm text-slate-400">等待识别结果</span>
+              <transition name="fade-badge">
+                <span
+                  v-if="rightPZ.zoomLabel.value"
+                  class="pointer-events-none absolute right-2 top-2 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-xs tabular-nums text-white/80 backdrop-blur-sm"
+                >
+                  {{ rightPZ.zoomLabel.value }}
+                </span>
+              </transition>
+              <div class="h-full w-full" :style="rightPZ.transformStyle.value">
+                <img
+                  v-if="previewUrl"
+                  :src="previewUrl"
+                  class="h-full w-full object-cover"
+                  alt="识别结果"
+                />
+                <span
+                  v-else
+                  class="flex h-full w-full items-center justify-center text-sm text-slate-400"
+                >
+                  等待识别结果
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- 全屏放大对比模态框 -->
+      <Teleport to="body">
+        <Transition name="modal-fade">
+          <div
+            v-if="showCompareModal"
+            class="fixed inset-0 z-[200] flex flex-col bg-black/95 backdrop-blur-sm"
+            @click.self="showCompareModal = false"
+          >
+            <!-- 弹窗顶栏 -->
+            <div
+              class="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-4"
+            >
+              <div class="flex items-center gap-3">
+                <svg
+                  class="h-5 w-5 text-primary-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                  />
+                </svg>
+                <h3 class="text-lg font-semibold text-white">放大对比</h3>
+                <span
+                  class="rounded-full bg-slate-700/50 px-2 py-0.5 text-xs text-slate-400"
+                >
+                  {{ statusLabel }}
+                </span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="hidden text-xs text-slate-500 sm:inline">
+                  滚轮缩放 · 拖拽平移 · 双面板独立操作
+                </span>
+                <button
+                  class="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  title="关闭 (ESC)"
+                  @click="showCompareModal = false"
+                >
+                  <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- 对比面板区域 -->
+            <div class="flex min-h-0 flex-1 gap-4 p-6">
+              <!-- 左侧：原始输入 -->
+              <div
+                class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
+              >
+                <div class="shrink-0 border-b border-white/10 px-4 py-2.5">
+                  <p
+                    class="text-xs font-medium uppercase tracking-[0.25em] text-slate-400/80"
+                  >
+                    {{ sourceLabel }}
+                  </p>
+                </div>
+                <div
+                  :ref="
+                    (el) => {
+                      modalLeftPZ.containerRef.value = el;
+                    }
+                  "
+                  class="relative min-h-0 flex-1 overflow-hidden bg-slate-950/60"
+                  :class="modalLeftPZ.cursorClass.value"
+                  @mousedown="modalLeftPZ.onMousedown"
+                  @mousemove="modalLeftPZ.onMousemove"
+                  @mouseup="modalLeftPZ.stopDrag"
+                  @mouseleave="modalLeftPZ.stopDrag"
+                >
+                  <transition name="fade-badge">
+                    <span
+                      v-if="modalLeftPZ.zoomLabel.value"
+                      class="pointer-events-none absolute right-2 top-2 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-xs tabular-nums text-white/80 backdrop-blur-sm"
+                    >
+                      {{ modalLeftPZ.zoomLabel.value }}
+                    </span>
+                  </transition>
+                  <div
+                    class="h-full w-full"
+                    :style="modalLeftPZ.transformStyle.value"
+                  >
+                    <video
+                      v-if="isCameraSource"
+                      ref="modalVideoRef"
+                      class="h-full w-full object-cover"
+                      autoplay
+                      muted
+                      playsinline
+                    ></video>
+                    <img
+                      v-else-if="previewUrl"
+                      :src="previewUrl"
+                      class="h-full w-full object-cover"
+                      alt="无线流预览"
+                    />
+                    <div
+                      v-else
+                      class="flex h-full w-full flex-col items-center justify-center gap-3 text-slate-500"
+                    >
+                      <svg
+                        class="h-10 w-10 opacity-40"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.5"
+                          d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"
+                        />
+                      </svg>
+                      <p class="text-sm">等待视频源连接…</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 右侧：识别输出 -->
+              <div
+                class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
+              >
+                <div class="shrink-0 border-b border-white/10 px-4 py-2.5">
+                  <p
+                    class="text-xs font-medium uppercase tracking-[0.25em] text-slate-400/80"
+                  >
+                    识别输出
+                  </p>
+                </div>
+                <div
+                  :ref="
+                    (el) => {
+                      modalRightPZ.containerRef.value = el;
+                    }
+                  "
+                  class="relative min-h-0 flex-1 overflow-hidden bg-slate-950/60"
+                  :class="modalRightPZ.cursorClass.value"
+                  @mousedown="modalRightPZ.onMousedown"
+                  @mousemove="modalRightPZ.onMousemove"
+                  @mouseup="modalRightPZ.stopDrag"
+                  @mouseleave="modalRightPZ.stopDrag"
+                >
+                  <transition name="fade-badge">
+                    <span
+                      v-if="modalRightPZ.zoomLabel.value"
+                      class="pointer-events-none absolute right-2 top-2 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-xs tabular-nums text-white/80 backdrop-blur-sm"
+                    >
+                      {{ modalRightPZ.zoomLabel.value }}
+                    </span>
+                  </transition>
+                  <div
+                    class="h-full w-full"
+                    :style="modalRightPZ.transformStyle.value"
+                  >
+                    <img
+                      v-if="previewUrl"
+                      :src="previewUrl"
+                      class="h-full w-full object-cover"
+                      alt="识别结果"
+                    />
+                    <div
+                      v-else
+                      class="flex h-full w-full flex-col items-center justify-center gap-3 text-slate-500"
+                    >
+                      <svg
+                        class="h-10 w-10 opacity-40"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.5"
+                          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <p class="text-sm">等待识别结果…</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 底部提示栏 -->
+            <div
+              class="shrink-0 border-t border-white/10 px-6 py-3 text-center"
+            >
+              <p class="text-xs text-slate-500">
+                按
+                <kbd
+                  class="rounded border border-white/20 bg-white/10 px-1.5 py-0.5 text-slate-300"
+                  >ESC</kbd
+                >
+                或点击空白处关闭 &nbsp;·&nbsp; 双面板可独立滚轮缩放与拖拽平移
+              </p>
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
 
       <!-- 识别摘要（全宽，横向统计卡片） -->
       <div
@@ -381,7 +671,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { supabase } from "../config/supabase";
 import { useDetectionStore } from "../stores/detection";
 import { buildProtectedApiUrl } from "../utils/protected-url";
@@ -389,7 +686,125 @@ import { buildProtectedApiUrl } from "../utils/protected-url";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const detectionStore = useDetectionStore();
 
+// ── usePanZoom：鼠标滚轮缩放 + 拖拽平移 ──────────────────────────────
+function usePanZoom() {
+  const containerRef = ref(null);
+  const zoom = ref(1);
+  const tx = ref(0);
+  const ty = ref(0);
+  const isDragging = ref(false);
+  let _sx = 0,
+    _sy = 0,
+    _stx = 0,
+    _sty = 0;
+
+  const clamp = () => {
+    if (!containerRef.value) return;
+    if (zoom.value <= 1) {
+      tx.value = 0;
+      ty.value = 0;
+      return;
+    }
+    const W = containerRef.value.clientWidth;
+    const H = containerRef.value.clientHeight;
+    tx.value = Math.max(W * (1 - zoom.value), Math.min(0, tx.value));
+    ty.value = Math.max(H * (1 - zoom.value), Math.min(0, ty.value));
+  };
+
+  const _onWheel = (e) => {
+    e.preventDefault();
+    if (!containerRef.value) return;
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const newZoom = Math.max(1, Math.min(8, zoom.value * factor));
+    if (newZoom === zoom.value) return;
+    const rect = containerRef.value.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const ratio = newZoom / zoom.value;
+    tx.value = cx * (1 - ratio) + tx.value * ratio;
+    ty.value = cy * (1 - ratio) + ty.value * ratio;
+    zoom.value = newZoom;
+    clamp();
+  };
+
+  // containerRef 变化时自动注册/注销 wheel 监听（passive:false 才能 preventDefault）
+  watch(containerRef, (el, oldEl) => {
+    oldEl?.removeEventListener("wheel", _onWheel);
+    el?.addEventListener("wheel", _onWheel, { passive: false });
+  });
+
+  onBeforeUnmount(() => {
+    containerRef.value?.removeEventListener("wheel", _onWheel);
+  });
+
+  const onMousedown = (e) => {
+    if (zoom.value <= 1) return;
+    e.preventDefault();
+    isDragging.value = true;
+    _sx = e.clientX;
+    _sy = e.clientY;
+    _stx = tx.value;
+    _sty = ty.value;
+  };
+
+  const onMousemove = (e) => {
+    if (!isDragging.value) return;
+    tx.value = _stx + (e.clientX - _sx);
+    ty.value = _sty + (e.clientY - _sy);
+    clamp();
+  };
+
+  const stopDrag = () => {
+    isDragging.value = false;
+  };
+
+  const reset = () => {
+    zoom.value = 1;
+    tx.value = 0;
+    ty.value = 0;
+    isDragging.value = false;
+  };
+
+  const transformStyle = computed(() => ({
+    transform: `translate(${tx.value}px, ${ty.value}px) scale(${zoom.value})`,
+    transformOrigin: "0 0",
+    userSelect: "none",
+    willChange: "transform",
+  }));
+
+  const cursorClass = computed(() => {
+    if (isDragging.value) return "cursor-grabbing";
+    if (zoom.value > 1) return "cursor-grab";
+    return "cursor-zoom-in";
+  });
+
+  const zoomLabel = computed(() =>
+    zoom.value > 1.02 ? zoom.value.toFixed(1) + "x" : null,
+  );
+
+  return {
+    containerRef,
+    zoom,
+    transformStyle,
+    cursorClass,
+    zoomLabel,
+    isDragging,
+    onMousedown,
+    onMousemove,
+    stopDrag,
+    reset,
+  };
+}
+
+const leftPZ = usePanZoom();
+const rightPZ = usePanZoom();
+const modalLeftPZ = usePanZoom();
+const modalRightPZ = usePanZoom();
+// ─────────────────────────────────────────────────────────────────────
+
 const videoRef = ref(null);
+const modalVideoRef = ref(null);
+const showCompareModal = ref(false);
 const previewUrl = ref("");
 const errorMessage = ref("");
 const connectionState = ref("idle");
@@ -847,7 +1262,54 @@ const handleSocketMessage = async (event) => {
   }
 };
 
+// 全屏对比弹窗：打开时将摄像头流接入 modalVideoRef
+watch(showCompareModal, async (visible) => {
+  if (visible) {
+    modalLeftPZ.reset();
+    modalRightPZ.reset();
+    if (isCameraSource.value && stream) {
+      await nextTick();
+      if (modalVideoRef.value) {
+        modalVideoRef.value.srcObject = stream;
+        try {
+          await modalVideoRef.value.play();
+        } catch (_) {}
+      }
+    }
+  }
+});
+
+const handleGlobalKeydown = (e) => {
+  if (e.key === "Escape" && showCompareModal.value) {
+    showCompareModal.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener("keydown", handleGlobalKeydown);
+});
+
 onBeforeUnmount(() => {
+  document.removeEventListener("keydown", handleGlobalKeydown);
   cleanupRealtime();
 });
 </script>
+
+<style scoped>
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+.fade-badge-enter-active,
+.fade-badge-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-badge-enter-from,
+.fade-badge-leave-to {
+  opacity: 0;
+}
+</style>

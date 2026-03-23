@@ -1,6 +1,15 @@
-# Logs
-logs
-*.log
+# Logs - 统一存放在 logs/ 目录下
+logs/
+logs/backend/
+logs/frontend/
+logs/test/
+# 兜底：捕获散落在各目录的日志文件
+backend/*.log
+backend/*.err
+backend/*.out
+frontend/*.log
+frontend/*.err
+frontend/*.out
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -52,11 +61,21 @@ backend/results/
 
 # IDE
 .trae/
+.zed/
 
 # Runtime & temp files
 runtime/
-*.err
-*.out
+runs/
+# 根目录下的测试/临时图片
+/*.jpg
+/*.jpeg
+/*.png
+/*.bmp
+
+# 兜底：根目录下的临时输出文件
+/*.err
+/*.out
+/*.log
 esbuild.exe
 
 # Spec workflow
