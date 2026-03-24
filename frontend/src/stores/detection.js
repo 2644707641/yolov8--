@@ -86,6 +86,14 @@ export const useDetectionStore = defineStore("detection", () => {
     }),
   );
   const isProcessing = ref(false);
+  // 批量识别进度，{ percent, message, stage, current, total }
+  const detectionProgress = ref({
+    percent: 0,
+    message: "",
+    stage: "",
+    current: 0,
+    total: 0,
+  });
   const detectionHistory = ref([]);
   const currentResult = ref(null);
   const historyLoading = ref(false);
@@ -210,11 +218,19 @@ export const useDetectionStore = defineStore("detection", () => {
     }
   };
 
-  // 执行检测
+  // 执行检测（SSE 流式进度版）
   const runDetection = async (file, type = "image") => {
     try {
       isProcessing.value = true;
       requestError.value = "";
+      detectionProgress.value = {
+        percent: 0,
+        message: "正在准备上传...",
+        stage: "prepare",
+        current: 0,
+        total: 0,
+      };
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("type", type);
@@ -222,14 +238,85 @@ export const useDetectionStore = defineStore("detection", () => {
 
       const authHeader = await getAuthHeader();
 
-      const response = await axios.post(`${API_URL}/api/detect`, formData, {
+      // 使用 fetch 读取 SSE 流
+      const response = await fetch(`${API_URL}/api/detect`, {
+        method: "POST",
         headers: {
-          "Content-Type": "multipart/form-data",
           Authorization: authHeader,
+          // 不设置 Content-Type，让浏览器自动设置 multipart/form-data boundary
         },
+        body: formData,
       });
 
-      const result = response.data;
+      if (!response.ok) {
+        let detail = `HTTP ${response.status} 错误`;
+        try {
+          const errData = await response.json();
+          detail = errData?.detail || errData?.message || detail;
+        } catch (_) {}
+        throw new Error(detail);
+      }
+
+      // 读取 SSE 流
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let result = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE 格式：每条消息以 \n\n 结尾
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop(); // 最后一段可能不完整，保留
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) continue;
+          const jsonStr = line.slice(5).trim();
+          if (!jsonStr) continue;
+
+          let event;
+          try {
+            event = JSON.parse(jsonStr);
+          } catch (_) {
+            continue;
+          }
+
+          if (event.stage === "error") {
+            throw new Error(event.message || "识别过程中发生错误");
+          }
+
+          if (event.stage === "result") {
+            // 最终结果
+            result = event.data;
+            detectionProgress.value = {
+              percent: 100,
+              message: "识别完成！",
+              stage: "result",
+              current: 0,
+              total: 0,
+            };
+          } else {
+            // 进度更新
+            detectionProgress.value = {
+              percent: event.percent ?? detectionProgress.value.percent,
+              message: event.message ?? "",
+              stage: event.stage ?? "",
+              current: event.current ?? 0,
+              total: event.total ?? 0,
+            };
+          }
+        }
+      }
+
+      if (!result) {
+        throw new Error("未收到识别结果，请重试");
+      }
+
       console.log("[DEBUG] 后端返回的结果:", result);
 
       // 使用后端返回的URL（优先使用Supabase URL，如果没有则使用本地API URL）
@@ -247,33 +334,45 @@ export const useDetectionStore = defineStore("detection", () => {
         ...result,
         originalUrl: originalUrl,
         resultUrl: resultUrl,
-        isSupabase: !!result.originalUrlSupabase, // 标记是否来自Supabase
+        isSupabase: !!result.originalUrlSupabase,
       };
 
       console.log("[DEBUG] 当前结果设置为:", currentResult.value);
 
+      // 推送加载历史记录进度
+      detectionProgress.value = {
+        percent: 100,
+        message: "正在同步历史记录...",
+        stage: "loading_history",
+        current: 0,
+        total: 0,
+      };
+
       // 重新加载历史记录
       await loadHistory({ force: true });
+
+      detectionProgress.value = {
+        percent: 100,
+        message: "全部完成！",
+        stage: "done",
+        current: 0,
+        total: 0,
+      };
 
       return { success: true, data: currentResult.value };
     } catch (error) {
       console.error("检测失败:", error);
       currentResult.value = null;
 
-      // 提取详细错误信息
-      let errorMessage = "检测失败";
-      if (error.response) {
-        errorMessage =
-          error.response.data?.detail ||
-          error.response.data?.message ||
-          `HTTP ${error.response.status} 错误`;
-        console.error("后端错误详情:", error.response.data);
-      } else if (error.request) {
-        errorMessage = "无法连接到后端服务，请确保后端已启动在端口8000";
-      } else {
-        errorMessage = error.message;
-      }
+      const errorMessage = error.message || "检测失败";
       requestError.value = errorMessage;
+      detectionProgress.value = {
+        percent: 0,
+        message: errorMessage,
+        stage: "error",
+        current: 0,
+        total: 0,
+      };
 
       return { success: false, error: errorMessage };
     } finally {
@@ -379,6 +478,7 @@ export const useDetectionStore = defineStore("detection", () => {
     detectionParams,
     realtimePrefs,
     isProcessing,
+    detectionProgress,
     detectionHistory,
     currentResult,
     historyLoading,

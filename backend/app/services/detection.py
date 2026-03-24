@@ -21,10 +21,70 @@ from ultralytics import YOLO  # noqa: E402
 from app.services import system_monitor
 
 DetectionResult = Tuple[Path, List[dict], float, str]
+ProgressCallback = Any  # Callable[[dict], None]
 LiveFrameResult = Tuple[bytes, List[dict], float]
 LiveFrameInferenceResult = Tuple[np.ndarray, List[dict], float]
 
 _DETECTION_SEMAPHORE = asyncio.Semaphore(settings.max_concurrent_detections)
+
+
+# ── 自定义标注颜色配置 ───────────────────────────────────────────────────────
+# 类别名称关键词（小写匹配）——含这些词视为空车位
+_EMPTY_KEYWORDS = {"empty", "空", "free", "available", "vacant", "spare"}
+_COLOR_EMPTY = (0, 255, 0)  # 绿色（BGR）——空车位
+_COLOR_OCCUPIED = (0, 0, 255)  # 红色（BGR）——占用车位
+_BOX_THICKNESS = 1  # 标注框线宽（细线）
+
+
+def _get_box_color(class_name: str) -> tuple:
+    """根据类别名称返回标注颜色：空车位→绿色，占用→红色。"""
+    name_lower = class_name.lower()
+    if any(kw in name_lower for kw in _EMPTY_KEYWORDS):
+        return _COLOR_EMPTY
+    return _COLOR_OCCUPIED
+
+
+def _annotate_with_custom_colors(result) -> np.ndarray:
+    """
+    自定义颜色标注帧，替代 results[0].plot()：
+    - 空车位：绿色细线框
+    - 占用车位：红色细线框
+    - 线宽由 _BOX_THICKNESS 控制（默认 1，细线）
+    """
+    frame = result.orig_img.copy()
+    names = result.names
+    boxes = result.boxes
+
+    for box in boxes:
+        x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
+        class_name = names[int(box.cls[0])]
+        conf = float(box.conf[0])
+        color = _get_box_color(class_name)
+
+        # 绘制细线边框
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness=_BOX_THICKNESS)
+
+        # 绘制标签背景与文字
+        label = f"{class_name} {conf:.2f}"
+        font_scale = 0.45
+        font_thickness = 1
+        (tw, th), _ = cv2.getTextSize(
+            label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
+        )
+        label_top = max(y1 - th - 4, 0)
+        cv2.rectangle(frame, (x1, label_top), (x1 + tw + 2, y1), color, -1)
+        cv2.putText(
+            frame,
+            label,
+            (x1 + 1, max(y1 - 2, th)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (255, 255, 255),
+            font_thickness,
+            cv2.LINE_AA,
+        )
+
+    return frame
 
 
 def _sort_counts_desc(counts: Dict[str, int]) -> Dict[str, int]:
@@ -174,6 +234,7 @@ async def run_detection(
     params: Dict,
     result_dir: Path,
     logger,
+    progress_queue: Optional[asyncio.Queue] = None,
 ) -> DetectionResult:
     system_monitor.increment_active_tasks()
     try:
@@ -185,15 +246,24 @@ async def run_detection(
                 file_path.name,
                 params,
             )
+
+            loop = asyncio.get_event_loop()
+
+            def on_progress(info: dict):
+                if progress_queue is not None:
+                    loop.call_soon_threadsafe(progress_queue.put_nowait, info)
+
             return await anyio.to_thread.run_sync(
-                _process_detection_sync,
-                user_id,
-                model_path,
-                file_path,
-                file_type,
-                params,
-                result_dir,
-                logger,
+                lambda: _process_detection_sync(
+                    user_id,
+                    model_path,
+                    file_path,
+                    file_type,
+                    params,
+                    result_dir,
+                    logger,
+                    on_progress,
+                )
             )
     finally:
         system_monitor.decrement_active_tasks()
@@ -207,9 +277,13 @@ def _process_detection_sync(
     params: Dict,
     result_dir: Path,
     logger,
+    on_progress=None,
 ) -> DetectionResult:
     model = load_model_sync(model_path)
     logger.info("模型加载成功: %s", model_path)
+
+    if on_progress:
+        on_progress({"stage": "model_loaded", "message": "模型加载完成，开始检测..."})
 
     detection_params = _normalize_params(params)
     start_time = time.time()
@@ -222,6 +296,7 @@ def _process_detection_sync(
             result_dir=result_dir,
             detection_params=detection_params,
             logger=logger,
+            on_progress=on_progress,
         )
     else:
         result_path, detections, description = _detect_video(
@@ -231,6 +306,7 @@ def _process_detection_sync(
             result_dir=result_dir,
             detection_params=detection_params,
             logger=logger,
+            on_progress=on_progress,
         )
 
     elapsed = time.time() - start_time
@@ -349,7 +425,7 @@ def infer_live_array_sync(
         )
     elapsed = time.time() - start_time
 
-    annotated = results[0].plot()
+    annotated = _annotate_with_custom_colors(results[0])
     detections: List[dict] = []
     track_ids = _extract_track_ids(results[0])
     for idx, box in enumerate(results[0].boxes):
@@ -399,7 +475,19 @@ def _detect_image(
     result_dir: Path,
     detection_params: Dict,
     logger,
+    on_progress=None,
 ) -> Tuple[Path, List[dict], str]:
+    if on_progress:
+        on_progress(
+            {
+                "stage": "detecting",
+                "current": 0,
+                "total": 1,
+                "percent": 0,
+                "message": "正在对图片执行推理...",
+            }
+        )
+
     results = model.predict(
         source=str(file_path),
         imgsz=detection_params["imgsz"],
@@ -413,7 +501,18 @@ def _detect_image(
     boxes = results[0].boxes
     logger.info("图片检测到 %d 个目标", len(boxes))
 
-    annotated = results[0].plot()
+    if on_progress:
+        on_progress(
+            {
+                "stage": "annotating",
+                "current": 1,
+                "total": 1,
+                "percent": 50,
+                "message": "推理完成",
+            }
+        )
+
+    annotated = _annotate_with_custom_colors(results[0])
     result_filename = f"result_{user_id}_{int(time.time())}.jpg"
     result_path = result_dir / result_filename
     cv2.imwrite(str(result_path), annotated)
@@ -425,6 +524,17 @@ def _detect_image(
                 "class": results[0].names[int(box.cls[0])],
                 "confidence": float(box.conf[0]),
                 "bbox": box.xyxy[0].tolist(),
+            }
+        )
+
+    if on_progress:
+        on_progress(
+            {
+                "stage": "done_annotating",
+                "current": 1,
+                "total": 1,
+                "percent": 99,
+                "message": "标注完成，正在保存结果...",
             }
         )
 
@@ -440,6 +550,7 @@ def _detect_video(
     result_dir: Path,
     detection_params: Dict,
     logger,
+    on_progress=None,
 ) -> Tuple[Path, List[dict], str]:
     cap = cv2.VideoCapture(str(file_path))
     if not cap.isOpened():
@@ -448,6 +559,7 @@ def _detect_video(
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     if fps == 0 or width == 0 or height == 0:
         cap.release()
@@ -465,8 +577,24 @@ def _detect_video(
     frame_count = 0
     detections: List[dict] = []
     tracking_enabled = True
+    # 上次发送进度的帧数，避免频繁推送
+    _last_progress_frame = -1
+    _progress_interval = max(1, (total_frames or 1) // 50)  # 最多推送约50次
 
-    logger.info("视频处理开始，编码器=%s，帧间隔=%s", codec, frame_skip)
+    logger.info(
+        "视频处理开始，编码器=%s，帧间隔=%s，总帧数=%s", codec, frame_skip, total_frames
+    )
+
+    if on_progress and total_frames > 0:
+        on_progress(
+            {
+                "stage": "detecting",
+                "current": 0,
+                "total": total_frames,
+                "percent": 0,
+                "message": f"开始处理视频，共 {total_frames} 帧...",
+            }
+        )
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -509,7 +637,7 @@ def _detect_video(
                     save=False,
                     verbose=False,
                 )
-            annotated_frame = results[0].plot()
+            annotated_frame = _annotate_with_custom_colors(results[0])
             track_ids = _extract_track_ids(results[0])
             for idx, box in enumerate(results[0].boxes):
                 detections.append(
@@ -527,13 +655,53 @@ def _detect_video(
         out.write(annotated_frame)
         frame_count += 1
 
+        # 按间隔推送进度
+        if (
+            on_progress
+            and total_frames > 0
+            and frame_count - _last_progress_frame >= _progress_interval
+        ):
+            _last_progress_frame = frame_count
+            percent = min(99, int(frame_count / total_frames * 95))
+            on_progress(
+                {
+                    "stage": "detecting",
+                    "current": frame_count,
+                    "total": total_frames,
+                    "percent": percent,
+                    "message": f"正在识别第 {frame_count} / {total_frames} 帧...",
+                }
+            )
+
     cap.release()
     out.release()
 
     if not result_path.exists() or result_path.stat().st_size == 0:
         raise RuntimeError("生成的视频文件无效")
 
+    if on_progress:
+        on_progress(
+            {
+                "stage": "optimizing",
+                "current": total_frames,
+                "total": total_frames,
+                "percent": 97,
+                "message": "帧处理完毕，正在优化视频编码...",
+            }
+        )
+
     _optimize_video_with_ffmpeg(result_path, logger)
+
+    if on_progress:
+        on_progress(
+            {
+                "stage": "done_optimizing",
+                "current": total_frames,
+                "total": total_frames,
+                "percent": 99,
+                "message": "视频优化完成，正在保存结果...",
+            }
+        )
 
     description = _generate_description(detections, "video")
     return result_path, detections, description

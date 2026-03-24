@@ -1327,59 +1327,154 @@
                       {{ realtimeError }}
                     </p>
                   </div>
-                  <div
-                    v-else
-                    class="flex flex-col items-center justify-center gap-6 py-20 text-center"
-                  >
-                    <div class="relative">
-                      <div
-                        class="h-24 w-24 rounded-full border border-white/10 bg-white/5"
-                      ></div>
-                      <div
-                        class="absolute inset-0 flex items-center justify-center"
-                      >
+                  <div v-else class="flex flex-col gap-8 py-12 px-2">
+                    <!-- 顶部图标 + 标题 -->
+                    <div class="flex flex-col items-center gap-4 text-center">
+                      <div class="relative">
                         <div
-                          class="h-20 w-20 rounded-full border-2 border-primary-500/20"
+                          class="h-20 w-20 rounded-full border border-white/10 bg-white/5"
                         ></div>
-                      </div>
-                      <div
-                        class="absolute inset-0 flex items-center justify-center"
-                      >
                         <div
-                          class="h-16 w-16 animate-spin rounded-full border-b-4 border-primary-500"
-                        ></div>
-                      </div>
-                      <div
-                        class="absolute inset-0 flex items-center justify-center"
-                      >
-                        <svg
-                          class="h-7 w-7 text-primary-300"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                          class="absolute inset-0 flex items-center justify-center"
                         >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="1.5"
-                            d="M13 10V3L4 14h7v7l9-11h-7z"
-                          />
-                        </svg>
+                          <div
+                            class="h-16 w-16 animate-spin rounded-full border-b-4 border-primary-500"
+                          ></div>
+                        </div>
+                        <div
+                          class="absolute inset-0 flex items-center justify-center"
+                        >
+                          <svg
+                            class="h-6 w-6 text-primary-300"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="1.5"
+                              d="M13 10V3L4 14h7v7l9-11h-7z"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                      <div>
+                        <h3 class="text-xl font-semibold text-white">
+                          AI 正在分析素材
+                        </h3>
+                        <p class="mt-1 text-sm text-slate-300/70">
+                          {{
+                            detectionStore.detectionProgress.message ||
+                            "正在初始化..."
+                          }}
+                        </p>
                       </div>
                     </div>
-                    <div>
-                      <h3 class="text-xl font-semibold text-white">
-                        AI 正在分析素材
-                      </h3>
-                      <p class="mt-2 text-sm text-slate-300/75">
-                        使用 YOLOv8 模型推理，并应用预设的最优参数组合。
-                      </p>
+
+                    <!-- 进度条区域 -->
+                    <div class="space-y-3">
+                      <!-- 进度百分比 + 阶段标签 -->
+                      <div class="flex items-center justify-between text-xs">
+                        <span
+                          class="rounded-full px-2.5 py-0.5 font-medium"
+                          :class="{
+                            'bg-slate-500/20 text-slate-300':
+                              detectionStore.detectionProgress.stage ===
+                                'prepare' ||
+                              detectionStore.detectionProgress.stage ===
+                                'start',
+                            'bg-primary-500/20 text-primary-200':
+                              detectionStore.detectionProgress.stage ===
+                                'model_loaded' ||
+                              detectionStore.detectionProgress.stage ===
+                                'detecting' ||
+                              detectionStore.detectionProgress.stage ===
+                                'annotating' ||
+                              detectionStore.detectionProgress.stage ===
+                                'done_annotating',
+                            'bg-amber-500/20 text-amber-200':
+                              detectionStore.detectionProgress.stage ===
+                                'optimizing' ||
+                              detectionStore.detectionProgress.stage ===
+                                'done_optimizing' ||
+                              detectionStore.detectionProgress.stage ===
+                                'uploading_original' ||
+                              detectionStore.detectionProgress.stage ===
+                                'uploading_result' ||
+                              detectionStore.detectionProgress.stage ===
+                                'saving_local' ||
+                              detectionStore.detectionProgress.stage ===
+                                'loading_history',
+                            'bg-emerald-500/20 text-emerald-200':
+                              detectionStore.detectionProgress.stage ===
+                              'result',
+                          }"
+                        >
+                          {{
+                            {
+                              prepare: "准备中",
+                              start: "启动中",
+                              model_loaded: "模型就绪",
+                              detecting: "识别中",
+                              annotating: "推理完成",
+                              done_annotating: "保存结果",
+                              optimizing: "优化视频",
+                              done_optimizing: "即将完成",
+                              uploading_original: "上传原始文件",
+                              uploading_result: "上传结果文件",
+                              saving_local: "保存本地记录",
+                              loading_history: "同步历史记录",
+                              result: "完成",
+                            }[detectionStore.detectionProgress.stage] ||
+                            "处理中"
+                          }}
+                        </span>
+                        <span class="tabular-nums font-semibold text-white">
+                          {{ detectionStore.detectionProgress.percent }}%
+                        </span>
+                      </div>
+
+                      <!-- 进度条轨道 -->
+                      <div
+                        class="h-2.5 w-full overflow-hidden rounded-full bg-white/10"
+                      >
+                        <div
+                          class="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-400 transition-all duration-300 ease-out"
+                          :style="{
+                            width:
+                              detectionStore.detectionProgress.percent + '%',
+                          }"
+                        ></div>
+                      </div>
+
+                      <!-- 帧进度（仅视频识别时显示） -->
+                      <div
+                        v-if="detectionStore.detectionProgress.total > 0"
+                        class="flex items-center justify-between text-xs text-slate-400/70"
+                      >
+                        <span>
+                          已处理帧：
+                          <span class="tabular-nums text-slate-200">
+                            {{ detectionStore.detectionProgress.current }}
+                          </span>
+                          /
+                          <span class="tabular-nums text-slate-200">
+                            {{ detectionStore.detectionProgress.total }}
+                          </span>
+                        </span>
+                        <span class="text-slate-400/50">视频逐帧推理中</span>
+                      </div>
                     </div>
+
+                    <!-- 底部标签 -->
                     <div
-                      class="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-slate-400/60"
+                      class="flex items-center justify-center gap-3 text-[11px] uppercase tracking-[0.3em] text-slate-400/50"
                     >
                       <span>多目标追踪</span>
+                      <span>·</span>
                       <span>智能降噪</span>
+                      <span>·</span>
                       <span>稳定运行</span>
                     </div>
                   </div>
@@ -1636,9 +1731,7 @@
                         </p>
                         <p v-if="fileType === 'video'">
                           视频抽帧：每
-                          {{
-                            detectionStore.detectionParams.frameSkip
-                          }}
+                          {{ detectionStore.detectionParams.frameSkip }}
                           帧分析一次
                         </p>
                         <p v-if="fileType === 'video'">
@@ -1647,9 +1740,7 @@
                           }}
                         </p>
                         <p v-else>
-                          图像尺寸：{{
-                            detectionStore.detectionParams.imgSize
-                          }}
+                          图像尺寸：{{ detectionStore.detectionParams.imgSize }}
                           像素
                         </p>
                       </div>
