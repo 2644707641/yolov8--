@@ -19,6 +19,7 @@ from app.api.common import (
     logger,
     local_state,
     normalize_local_cleanup_settings,
+    normalize_realtime_prefs,
     pack_detection_params,
     run_local_cleanup_for_app,
     settings,
@@ -27,11 +28,11 @@ from app.api.common import (
 router = APIRouter()
 
 
-def build_settings_response(defaults, *, app, supabase_client):
+def build_settings_response(defaults, *, app, supabase_client, realtime=None):
     local_cleanup_settings = get_local_cleanup_settings(app)
     local_cleanup_meta = get_local_cleanup_meta(app)
     local_stats = get_local_storage_stats(app)
-    return {
+    response = {
         "success": True,
         "settings": {
             "defaults": pack_detection_params(defaults),
@@ -50,6 +51,9 @@ def build_settings_response(defaults, *, app, supabase_client):
             ),
         },
     }
+    if realtime is not None:
+        response["settings"]["realtime"] = realtime
+    return response
 
 
 @router.get("/api/settings")
@@ -69,7 +73,9 @@ async def get_settings(
         store[user_id] = user_settings
         local_state.save_user_settings(settings.user_settings_store_file, user_id, user_settings)
 
-    return build_settings_response(defaults, app=request.app, supabase_client=supabase_client)
+    realtime = normalize_realtime_prefs(user_settings.get("realtime"))
+
+    return build_settings_response(defaults, app=request.app, supabase_client=supabase_client, realtime=realtime)
 
 
 @router.put("/api/settings")
@@ -106,13 +112,16 @@ async def update_settings(
     )
 
     user_settings["defaults"] = normalized
+    current_realtime = user_settings.get("realtime")
+    normalized_realtime = normalize_realtime_prefs(payload.realtime, current_realtime)
+    user_settings["realtime"] = normalized_realtime
     store[user_id] = user_settings
     app_settings["localCleanup"] = normalized_local_cleanup
     request.app.state.app_settings = app_settings
     local_state.save_user_settings(settings.user_settings_store_file, user_id, user_settings)
     local_state.save_app_settings(settings.user_settings_store_file, app_settings)
 
-    return build_settings_response(normalized, app=request.app, supabase_client=supabase_client)
+    return build_settings_response(normalized, app=request.app, supabase_client=supabase_client, realtime=normalized_realtime)
 
 
 @router.post("/api/settings/storage/cleanup")
@@ -131,6 +140,8 @@ async def cleanup_local_storage_now(
         store[user_id] = user_settings
         local_state.save_user_settings(settings.user_settings_store_file, user_id, user_settings)
 
+    realtime = normalize_realtime_prefs(user_settings.get("realtime"))
+
     cleanup_result = run_local_cleanup_for_app(
         request.app,
         logger=logger,
@@ -138,7 +149,7 @@ async def cleanup_local_storage_now(
     )
 
     return {
-        **build_settings_response(defaults, app=request.app, supabase_client=supabase_client),
+        **build_settings_response(defaults, app=request.app, supabase_client=supabase_client, realtime=realtime),
         "cleanup": {
             "removedRecords": cleanup_result["summary"]["removed_records"],
             "removedArchives": cleanup_result["summary"]["removed_archives"],

@@ -821,15 +821,29 @@ const recordDurationSeconds = computed({
   set: (value) =>
     detectionStore.updateRealtimePrefs({ recordDurationSeconds: value }),
 });
+const activeSourceMode = ref(null);
+const activeNetworkUrl = ref(null);
+
 const sourceMode = computed({
-  get: () => detectionStore.realtimePrefs.sourceMode,
-  set: (value) => detectionStore.updateRealtimePrefs({ sourceMode: value }),
+  get: () => activeSourceMode.value ?? detectionStore.realtimePrefs.sourceMode,
+  set: (value) => {
+    activeSourceMode.value = value;
+  },
 });
 const networkStreamUrl = computed({
-  get: () => detectionStore.realtimePrefs.networkStreamUrl,
-  set: (value) =>
-    detectionStore.updateRealtimePrefs({ networkStreamUrl: value }),
+  get: () => activeNetworkUrl.value ?? detectionStore.realtimePrefs.networkStreamUrl,
+  set: (value) => {
+    activeNetworkUrl.value = value;
+  },
 });
+
+watch(
+  () => detectionStore.realtimePrefs.sourceMode,
+  () => {
+    activeSourceMode.value = null;
+    activeNetworkUrl.value = null;
+  },
+);
 
 // 推理置信度阈值：读写 detectionStore，变化时实时推送给后端
 const displayConfidence = computed({
@@ -1287,6 +1301,9 @@ const handleGlobalKeydown = (e) => {
 
 onMounted(() => {
   document.addEventListener("keydown", handleGlobalKeydown);
+  activeSourceMode.value = null;
+  activeNetworkUrl.value = null;
+  detectionStore.initRealtimeFromBackend();
 });
 
 onBeforeUnmount(() => {

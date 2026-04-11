@@ -828,6 +828,14 @@ const loadSettings = async () => {
       mergeStoragePolicy(settings.storage);
     }
 
+    if (settings.realtime) {
+      realtimePrefs.value = {
+        ...realtimePrefs.value,
+        ...settings.realtime,
+      };
+      normalizeRealtimePrefs();
+    }
+
     normalizeDefaults();
     persistLocalSettings();
   } catch (err) {
@@ -863,6 +871,7 @@ const saveSettings = async () => {
             maxRecords: storagePolicy.value.localCleanup.maxRecords,
           },
         },
+        realtime: realtimePrefs.value,
       }),
     });
 
@@ -880,6 +889,13 @@ const saveSettings = async () => {
     }
     if (settings.storage) {
       mergeStoragePolicy(settings.storage);
+    }
+    if (settings.realtime) {
+      realtimePrefs.value = {
+        ...realtimePrefs.value,
+        ...settings.realtime,
+      };
+      normalizeRealtimePrefs();
     }
     if (settings.system) {
       systemInfo.value = {

@@ -30,6 +30,7 @@ DEFAULT_STORAGE_POLICY = {
 class SettingsUpdate(BaseModel):
     defaults: Optional[Dict[str, Any]] = None
     storage: Optional[Dict[str, Any]] = None
+    realtime: Optional[Dict[str, Any]] = None
 
 
 def get_default_local_cleanup_settings() -> Dict[str, Any]:
@@ -90,6 +91,38 @@ def normalize_local_cleanup_settings(
             payload.get("maxRecords"),
             "maxRecords",
         )
+    return normalized
+
+
+def normalize_realtime_prefs(
+    payload: Optional[Dict[str, Any]],
+    current: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    default_prefs = {
+        "recordEnabled": True,
+        "recordFps": 8,
+        "recordDurationSeconds": 0,
+        "sourceMode": "camera",
+        "networkStreamUrl": "",
+    }
+    normalized = {**default_prefs, **(current or {})}
+    if not payload:
+        return normalized
+
+    if "recordEnabled" in payload:
+        normalized["recordEnabled"] = bool(payload["recordEnabled"])
+    if "recordFps" in payload:
+        normalized["recordFps"] = _normalize_positive_int(payload["recordFps"], "recordFps")
+    if "recordDurationSeconds" in payload:
+        try:
+            val = int(payload["recordDurationSeconds"])
+        except (TypeError, ValueError):
+            val = 0
+        normalized["recordDurationSeconds"] = max(0, val)
+    if "sourceMode" in payload:
+        normalized["sourceMode"] = "network" if payload["sourceMode"] == "network" else "camera"
+    if "networkStreamUrl" in payload:
+        normalized["networkStreamUrl"] = str(payload["networkStreamUrl"] or "").strip()
     return normalized
 
 

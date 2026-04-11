@@ -455,6 +455,33 @@ export const useDetectionStore = defineStore("detection", () => {
     }
   };
 
+  // 从后端加载 realtime 偏好，覆盖本地缓存
+  const initRealtimeFromBackend = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const response = await fetch(`${API_URL}/api/settings`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      const realtime = data.settings?.realtime;
+      if (realtime) {
+        realtimePrefs.value = normalizeRealtimePrefs({
+          ...defaultRealtimePrefs,
+          ...realtime,
+        });
+        persistSettings();
+      }
+    } catch {
+      // 后端加载失败，使用本地缓存
+    }
+  };
+
   // 清理缓存（退出登录时使用）
   const clearCache = () => {
     modelFile.value = null;
@@ -486,6 +513,7 @@ export const useDetectionStore = defineStore("detection", () => {
     lastHistorySyncAt,
     updateDefaults,
     updateRealtimePrefs,
+    initRealtimeFromBackend,
     uploadModel,
     runDetection,
     loadHistory,

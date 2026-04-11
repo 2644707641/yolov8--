@@ -61,6 +61,11 @@
   .input-field {
     @apply w-full px-4 py-3 border border-white/10 rounded-xl bg-white/5 text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/70 focus:border-transparent transition-all duration-300;
   }
+
+  select.input-field option {
+    background-color: #1e293b;
+    color: #f1f5f9;
+  }
   
   .card {
     @apply relative rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_25px_60px_rgba(8,15,40,0.35)] overflow-hidden p-8;
