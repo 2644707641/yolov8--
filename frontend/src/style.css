@@ -12,15 +12,16 @@
   body {
     font-family: 'Plus Jakarta Sans', 'Microsoft YaHei', 'PingFang SC', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     @apply antialiased text-slate-100;
+    background-color: #020d10;
     background-image:
-      radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.18), transparent 40%),
-      radial-gradient(circle at 80% 0%, rgba(217, 70, 239, 0.12), transparent 45%),
-      linear-gradient(180deg, #05090f 0%, #070c19 60%, #03050a 100%);
+      radial-gradient(circle at 20% 20%, rgba(6, 182, 212, 0.15), transparent 40%),
+      radial-gradient(circle at 80% 0%, rgba(59, 130, 246, 0.10), transparent 45%),
+      linear-gradient(180deg, #020d10 0%, #041520 60%, #010a0d 100%);
     background-attachment: fixed;
   }
 
   ::selection {
-    background-color: rgba(37, 99, 235, 0.35);
+    background-color: rgba(6, 182, 212, 0.35);
     color: #f8fafc;
   }
 
@@ -46,7 +47,7 @@
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center px-6 py-3 text-sm font-semibold tracking-wide text-white rounded-xl bg-gradient-to-r from-primary-500 via-primary-600 to-primary-500 shadow-[0_20px_45px_rgba(37,99,235,0.35)] hover:shadow-[0_25px_60px_rgba(37,99,235,0.55)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0;
+    @apply inline-flex items-center justify-center px-6 py-3 text-sm font-semibold tracking-wide text-white rounded-xl bg-gradient-to-r from-cyan-500 via-blue-500 to-cyan-500 shadow-[0_20px_45px_rgba(6,182,212,0.30)] hover:shadow-[0_25px_60px_rgba(6,182,212,0.50)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0;
   }
   
   .btn-secondary {
@@ -58,7 +59,7 @@
   }
   
   .input-field {
-    @apply w-full px-4 py-3 border border-white/10 rounded-xl bg-white/5 text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/70 focus:border-transparent transition-all duration-300;
+    @apply w-full px-4 py-3 border border-white/10 rounded-xl bg-white/5 text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/70 focus:border-transparent transition-all duration-300;
   }
   
   .card {
@@ -112,7 +113,7 @@
   }
 
   .text-gradient {
-    background: linear-gradient(135deg, #70caff 0%, #a855f7 50%, #f472b6 100%);
+    background: linear-gradient(135deg, #22d3ee 0%, #3b82f6 50%, #06b6d4 100%);
     -webkit-background-clip: text;
     color: transparent;
   }
@@ -123,8 +124,8 @@
   height: 18px;
   width: 18px;
   border-radius: 9999px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(37, 99, 235, 1) 45%, rgba(30, 64, 175, 1) 100%);
-  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.55), 0 0 0 4px rgba(15, 23, 42, 0.45);
+  background: linear-gradient(135deg, rgba(6, 182, 212, 1) 0%, rgba(37, 99, 235, 1) 45%, rgba(30, 64, 175, 1) 100%);
+  box-shadow: 0 6px 18px rgba(6, 182, 212, 0.45), 0 0 0 4px rgba(2, 13, 16, 0.45);
   border: none;
 }
 
@@ -132,19 +133,19 @@
   height: 18px;
   width: 18px;
   border-radius: 9999px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(37, 99, 235, 1) 45%, rgba(30, 64, 175, 1) 100%);
-  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.55);
+  background: linear-gradient(135deg, rgba(6, 182, 212, 1) 0%, rgba(37, 99, 235, 1) 45%, rgba(30, 64, 175, 1) 100%);
+  box-shadow: 0 6px 18px rgba(6, 182, 212, 0.45);
   border: none;
 }
 
 .ui-range::-webkit-slider-runnable-track {
   height: 2px;
   border-radius: 9999px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0%, rgba(37, 99, 235, 0.45) 100%);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0%, rgba(6, 182, 212, 0.45) 100%);
 }
 
 .ui-range::-moz-range-track {
   height: 2px;
   border-radius: 9999px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0%, rgba(37, 99, 235, 0.45) 100%);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0%, rgba(6, 182, 212, 0.45) 100%);
 }

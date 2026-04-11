@@ -1,27 +1,29 @@
 <template>
   <div
     data-testid="app-shell-root"
-    class="relative h-screen overflow-hidden bg-slate-950"
+    class="relative h-screen overflow-hidden"
+    style="background-color: #020d10;"
   >
     <div class="absolute inset-0">
       <div
-        class="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-black"
+        class="absolute inset-0"
+        style="background: linear-gradient(to bottom right, #020d10, #041520, #010a0d);"
       ></div>
       <div class="absolute inset-0 bg-grid opacity-10"></div>
       <div
-        class="absolute -top-24 left-1/4 h-80 w-80 rounded-full bg-primary-500/20 blur-3xl"
+        class="absolute -top-24 left-1/4 h-80 w-80 rounded-full bg-cyan-500/20 blur-3xl"
       ></div>
       <div
-        class="absolute top-1/2 -right-32 h-[420px] w-[420px] -translate-y-1/2 rounded-full bg-accent-500/20 blur-3xl"
+        class="absolute top-1/2 -right-32 h-[420px] w-[420px] -translate-y-1/2 rounded-full bg-blue-500/15 blur-3xl"
       ></div>
       <div
-        class="absolute bottom-0 left-0 h-[360px] w-[360px] rounded-full bg-primary-900/20 blur-3xl"
+        class="absolute bottom-0 left-0 h-[360px] w-[360px] rounded-full bg-cyan-900/20 blur-3xl"
       ></div>
     </div>
 
     <div class="relative z-10 flex h-full overflow-hidden">
       <aside
-        class="hidden h-full min-h-0 flex-col overflow-hidden border-r border-white/10 bg-slate-950/70 backdrop-blur-xl transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex"
+        class="hidden h-full min-h-0 flex-col overflow-hidden border-r border-white/10 bg-black/70 backdrop-blur-xl transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex"
         :class="isCollapsed ? 'w-28' : 'w-72'"
       >
         <div
@@ -30,7 +32,7 @@
           :class="isCollapsed ? 'justify-between gap-2 px-3' : 'gap-3'"
         >
           <div
-            class="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-500/20 text-primary-200"
+            class="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-500/20 text-cyan-200"
           >
             <svg
               class="h-6 w-6"
@@ -164,7 +166,7 @@
               :class="[
                 isCollapsed ? 'px-3 justify-center' : 'px-4',
                 isActive(item.path)
-                  ? 'border-primary-400/40 bg-primary-500/20 text-white shadow-[0_15px_35px_rgba(37,99,235,0.35)]'
+                  ? 'border-cyan-400/40 bg-cyan-500/20 text-white shadow-[0_15px_35px_rgba(6,182,212,0.30)]'
                   : 'text-slate-300 hover:border-white/10 hover:bg-white/5',
               ]"
               :data-testid="item.testId"
@@ -224,7 +226,7 @@
               </span>
               <span
                 v-if="isCollapsed"
-                class="pointer-events-none absolute left-full top-1/2 z-20 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-xl border border-white/10 bg-slate-900/95 px-3 py-2 text-xs text-white opacity-0 shadow-[0_20px_45px_rgba(8,15,40,0.45)] transition-opacity duration-200 delay-200 group-hover:opacity-100"
+                class="pointer-events-none absolute left-full top-1/2 z-20 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-xl border border-white/10 bg-[#020d10]/95 px-3 py-2 text-xs text-white opacity-0 shadow-[0_20px_45px_rgba(2,13,16,0.45)] transition-opacity duration-200 delay-200 group-hover:opacity-100"
                 :data-testid="`${item.testId}-tooltip`"
               >
                 {{ item.label }}
@@ -306,7 +308,7 @@
       class="fixed bottom-0 left-0 z-40 hidden w-72 px-4 pb-4 pt-3 lg:block"
     >
       <div
-        class="rounded-2xl border border-white/10 bg-slate-950/70 p-4 backdrop-blur-xl shadow-[0_18px_45px_rgba(6,11,30,0.35)]"
+        class="rounded-2xl border border-white/10 bg-black/70 p-4 backdrop-blur-xl shadow-[0_18px_45px_rgba(2,13,16,0.35)]"
       >
         <div class="rounded-2xl border border-white/10 bg-white/5 p-3">
           <p class="text-xs uppercase tracking-[0.3em] text-slate-400/80">
@@ -322,7 +324,7 @@
           </div>
         </div>
         <button
-          class="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+          class="mt-3 w-full rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300 transition hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-200"
           @click="authStore.logout"
         >
           退出登录
@@ -338,7 +340,7 @@
         ></div>
         <div
           data-testid="mobile-nav-panel"
-          class="relative z-10 flex h-full w-72 flex-col overflow-hidden border-r border-white/10 bg-slate-950/95 backdrop-blur-xl"
+          class="relative z-10 flex h-full w-72 flex-col overflow-hidden border-r border-white/10 bg-black/95 backdrop-blur-xl"
         >
           <div
             data-testid="mobile-nav-header"

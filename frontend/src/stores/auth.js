@@ -129,7 +129,6 @@ export const useAuthStore = defineStore('auth', () => {
         throw signInError
       }
 
-      router.push('/overview')
       return { success: true, data }
     } catch (err) {
       console.error('登录失败:', err)
