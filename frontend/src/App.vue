@@ -6,19 +6,43 @@
     class="fixed inset-0 z-[9999] pointer-events-none"
     :style="{ backgroundColor: '#0891b2', opacity: transitionOpacity }"
   ></div>
+  <!-- 斑点光标：仅认证后页面显示 -->
+  <BlobCursor
+    v-if="showCursor"
+    blobType="circle"
+    fillColor="#06b6d4"
+    :trailCount="3"
+    :sizes="[20, 40, 28]"
+    :innerSizes="[8, 14, 10]"
+    innerColor="rgba(255,255,255,0.8)"
+    :opacities="[0.5, 0.4, 0.35]"
+    shadowColor="rgba(0,0,0,0.75)"
+    :shadowBlur="5"
+    :shadowOffsetX="10"
+    :shadowOffsetY="10"
+    :filterStdDeviation="12"
+    :useFilter="true"
+    :fastDuration="0.1"
+    :slowDuration="0.5"
+    :zIndex="9998"
+  />
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from './stores/auth'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import gsap from 'gsap'
+import BlobCursor from './components/BlobCursor.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const transitionOverlay = ref(false)
 const transitionOpacity = ref(1)
+
+const showCursor = ref(true)
 
 // 监听路由变化：从登录页进入时，显示蓝色遮罩并淡出
 router.afterEach((to, from) => {

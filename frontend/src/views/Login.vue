@@ -143,7 +143,7 @@ const portalOverlay = ref(null)
 const registerSuccess = ref(false)
 const loginSuccess = ref(false)
 
-let scene, camera, renderer, blob
+let scene, camera, renderer, blob, animationId, geometry
 
 // 密码字段可见性控制
 const fieldVisible = reactive({
@@ -190,7 +190,7 @@ const initThree = () => {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   canvasContainer.value.appendChild(renderer.domElement)
 
-  const geometry = new THREE.IcosahedronGeometry(2, 64)
+  geometry = new THREE.IcosahedronGeometry(2, 16)
   const material = new THREE.MeshPhysicalMaterial({
     color: 0x06b6d4,
     metalness: 0.1,
@@ -217,12 +217,13 @@ const initThree = () => {
   scene.add(ambientLight)
 
   const clock = new THREE.Clock()
+  const positionAttribute = geometry.getAttribute('position')
+  const vertexCount = positionAttribute.count
+  const vertex = new THREE.Vector3()
   const animate = () => {
     const elapsedTime = clock.getElapsedTime()
-    const positionAttribute = geometry.getAttribute('position')
-    const vertex = new THREE.Vector3()
 
-    for (let i = 0; i < positionAttribute.count; i++) {
+    for (let i = 0; i < vertexCount; i++) {
       vertex.fromBufferAttribute(positionAttribute, i)
       const offset = 0.15 * Math.sin(vertex.x * 2 + elapsedTime * 1.5) +
                      0.15 * Math.sin(vertex.y * 1.5 + elapsedTime * 2)
@@ -232,9 +233,9 @@ const initThree = () => {
     positionAttribute.needsUpdate = true
     blob.rotation.y += 0.005
     renderer.render(scene, camera)
-    requestAnimationFrame(animate)
+    animationId = requestAnimationFrame(animate)
   }
-  animate()
+  animationId = requestAnimationFrame(animate)
 
   // 初始位置：偏左显示，不遮挡表单
   blob.position.x = -3
@@ -335,8 +336,11 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (animationId) cancelAnimationFrame(animationId)
   window.removeEventListener('resize', handleResize)
   renderer?.dispose()
+  geometry?.dispose()
+  blob?.material?.dispose()
   scene?.clear()
 })
 </script>
