@@ -12,7 +12,7 @@
     </Transition>
 
     <!-- 转场遮罩 -->
-    <div ref="portalOverlay" class="fixed inset-0 z-[90] bg-cyan-600 scale-y-0 origin-bottom pointer-events-none opacity-0"></div>
+    <div ref="portalOverlay" class="fixed inset-0 z-[90] bg-cyan-600 pointer-events-none" style="opacity: 0;"></div>
 
     <!-- 认证表单层 -->
     <div class="auth-container min-h-screen flex items-center justify-end pr-12 md:pr-32 overflow-hidden relative font-sans">
@@ -62,13 +62,31 @@
               <label class="block text-xs font-bold tracking-[0.2em] text-slate-200 uppercase transition-colors group-focus-within:text-blue-400">
                 {{ field.label }}
               </label>
-              <input
-                v-model="formData[field.id]"
-                :type="field.type"
-                class="w-full bg-transparent border-b border-white/30 py-6 text-2xl font-medium tracking-widest outline-none transition-all duration-500 text-white focus:border-cyan-500 placeholder:text-slate-600"
-                :placeholder="field.placeholder"
-                required
-              />
+              <div class="relative">
+                <input
+                  v-model="formData[field.id]"
+                  :type="field.id === 'uid' ? 'text' : (fieldVisible[field.id] ? 'text' : 'password')"
+                  class="w-full bg-transparent border-b border-white/30 py-6 text-2xl font-medium tracking-widest outline-none transition-all duration-500 text-white focus:border-cyan-500 placeholder:text-slate-600"
+                  :class="{ 'pr-10': isLogin && (field.id === 'key' || field.id === 'confirm_key') }"
+                  :placeholder="field.placeholder"
+                  required
+                />
+                <button
+                  v-if="isLogin && (field.id === 'key' || field.id === 'confirm_key')"
+                  type="button"
+                  @click="fieldVisible[field.id] = !fieldVisible[field.id]"
+                  class="absolute right-0 top-1/2 -translate-y-1/2 text-slate-500 hover:text-cyan-400 transition-colors duration-300 p-2"
+                  :aria-label="fieldVisible[field.id] ? '隐藏密码' : '显示密码'"
+                >
+                  <svg v-if="!fieldVisible[field.id]" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                  </svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12c1.292 4.338 5.31 7.5 10.066 7.5.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" />
+                  </svg>
+                </button>
+              </div>
               <!-- 聚焦时的底部进度条 -->
               <div class="absolute bottom-0 left-0 w-0 h-px bg-cyan-500 transition-all duration-700 group-focus-within:w-full"></div>
             </div>
@@ -127,6 +145,12 @@ const loginSuccess = ref(false)
 
 let scene, camera, renderer, blob
 
+// 密码字段可见性控制
+const fieldVisible = reactive({
+  key: false,
+  confirm_key: false
+})
+
 // 表单数据绑定
 const formData = reactive({
   uid: '',
@@ -178,6 +202,7 @@ const initThree = () => {
   })
 
   blob = new THREE.Mesh(geometry, material)
+  blob.material.side = THREE.DoubleSide
   scene.add(blob)
 
   const pointLight1 = new THREE.PointLight(0x06b6d4, 50, 20)
@@ -253,28 +278,23 @@ const handleSubmit = async () => {
     if (result.success) {
       // 显示成功横幅
       loginSuccess.value = true
-      // 登录成功的动效
-      gsap.to(authTerminal.value, { x: 50, opacity: 0, duration: 1, ease: "expo.in" })
-      gsap.to(blob.scale, { x: 5, y: 5, z: 5, duration: 1.8, ease: "power4.inOut" })
-      gsap.to(blob.position, { z: 2, duration: 1.8, ease: "power4.inOut" })
-      // 蓝色遮罩展开
-      gsap.to(portalOverlay.value, {
-        opacity: 1,
-        scaleY: 1,
-        duration: 1.2,
-        ease: "expo.inOut",
-        delay: 1.5,
-      })
-      // 遮罩展开后保持片刻，再缓慢淡出进入控制台
-      gsap.to(portalOverlay.value, {
-        opacity: 0,
-        duration: 1.5,
-        ease: "power2.inOut",
-        delay: 3.5,
-        onComplete: () => {
-          router.push('/overview')
-        }
-      })
+      // 登录成功的动效：圆球扩大 → 停顿 → 蓝色出现 → 跳转
+      gsap.to(authTerminal.value, { x: 50, opacity: 0, duration: 0.8, ease: "expo.in" })
+      // 提升canvas层级到最顶层，移除混合模式干扰，让球体可见
+      canvasContainer.value.style.zIndex = '100'
+      canvasContainer.value.style.mixBlendMode = 'normal'
+      canvasContainer.value.style.opacity = '1'
+      canvasContainer.value.style.backgroundColor = '#020d10'
+
+      const tl = gsap.timeline({ delay: 0.3 })
+      // 第一阶段：圆球扩大、移到屏幕中心、从透光变实心
+      tl.to(blob.position, { x: 0, y: 0, z: 3.5, duration: 1.2, ease: "power3.inOut" }, 0)
+      tl.to(blob.scale, { x: 4, y: 4, z: 4, duration: 1.2, ease: "power3.inOut" }, 0)
+      tl.to(blob.material, { transmission: 0, emissiveIntensity: 2, opacity: 1, duration: 1.0, ease: "power2.inOut" }, 0)
+      // 第二阶段：停顿0.3s后，蓝色遮罩淡入覆盖
+      tl.to(portalOverlay.value, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, "+=0.3")
+      // 第三阶段：跳转
+      tl.call(() => { router.push('/overview') })
     }
   } else {
     const result = await authStore.register(formData.uid, formData.key)

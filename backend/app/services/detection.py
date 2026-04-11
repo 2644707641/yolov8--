@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import sys
+import threading
 import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -26,6 +28,56 @@ LiveFrameResult = Tuple[bytes, List[dict], float]
 LiveFrameInferenceResult = Tuple[np.ndarray, List[dict], float]
 
 _DETECTION_SEMAPHORE = asyncio.Semaphore(settings.max_concurrent_detections)
+
+# ── YOLO 模型 LRU 缓存 ────────────────────────────────────────────────────────
+_MODEL_CACHE_MAX_SIZE = 4
+_model_cache: OrderedDict[str, YOLO] = OrderedDict()
+_model_cache_lock = threading.Lock()
+
+
+def load_model_sync(model_path: Path) -> YOLO:
+    """
+    同步加载 YOLO 模型，带 LRU 缓存。
+    同一路径复用模型实例，避免重复加载造成内存峰值。
+    """
+    key = str(model_path)
+    with _model_cache_lock:
+        if key in _model_cache:
+            _model_cache.move_to_end(key)
+            return _model_cache[key]
+
+    model = YOLO(key)
+
+    with _model_cache_lock:
+        # 二次检查：防止并发时重复加载
+        if key in _model_cache:
+            _model_cache.move_to_end(key)
+            return _model_cache[key]
+        _model_cache[key] = model
+        # 淘汰最久未使用的模型
+        while len(_model_cache) > _MODEL_CACHE_MAX_SIZE:
+            _, evicted = _model_cache.popitem(last=False)
+            try:
+                del evicted
+            except Exception:
+                pass
+
+    return model
+
+
+def invalidate_model_cache(model_path: Path | None = None) -> None:
+    """
+    清除模型缓存。
+    传入 model_path 则只清除该路径；否则清除全部。
+    上传新模型时应调用此函数，确保下次加载新权重。
+    """
+    with _model_cache_lock:
+        if model_path is not None:
+            key = str(model_path)
+            if key in _model_cache:
+                del _model_cache[key]
+        else:
+            _model_cache.clear()
 
 
 # ── 自定义标注颜色配置 ───────────────────────────────────────────────────────
@@ -322,11 +374,6 @@ def _normalize_params(raw: Dict) -> Dict:
         "max_det": int(raw.get("maxDetections", 300)),
         "frame_skip": max(1, int(raw.get("frameSkip", 1))),
     }
-
-
-def load_model_sync(model_path: Path) -> YOLO:
-    """同步加载 YOLO 模型，供批量检测与实时检测复用。"""
-    return YOLO(str(model_path))
 
 
 def create_video_writer_sync(

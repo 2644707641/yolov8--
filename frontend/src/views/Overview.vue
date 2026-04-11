@@ -77,7 +77,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -164,8 +164,17 @@ async function fetchSystemStatus() {
   }
 }
 
+let statusTimer = null
+
 onMounted(() => {
   fetchSystemStatus()
-  setInterval(fetchSystemStatus, 5000)
+  statusTimer = setInterval(fetchSystemStatus, 5000)
+})
+
+onBeforeUnmount(() => {
+  if (statusTimer) {
+    clearInterval(statusTimer)
+    statusTimer = null
+  }
 })
 </script>

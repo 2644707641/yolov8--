@@ -112,6 +112,7 @@ async def upload_model(
 
         previous_model = await model_registry.registry.remove_model(user_id)
         if previous_model:
+            detection_service.invalidate_model_cache(previous_model)
             storage_service.remove_file(previous_model, logger)
 
         await model_registry.registry.set_model(user_id, model_path)
@@ -523,6 +524,9 @@ async def detect_live(websocket: WebSocket):
                         model = await anyio.to_thread.run_sync(
                             detection_service.load_model_sync, model_path
                         )
+                        # 重置跟踪器状态，避免复用缓存模型时残留旧跟踪数据
+                        if hasattr(model, "track"):
+                            model._codex_tracking_enabled = True
                         record_enabled = bool(recording.get("enabled", False))
                         record_fps = float(recording.get("fps", 8.0) or 8.0)
                         if record_fps <= 0:
@@ -783,3 +787,6 @@ async def detect_live(websocket: WebSocket):
                 record_writer.release()
             except Exception:
                 pass
+        if model is not None:
+            del model
+            model = None
