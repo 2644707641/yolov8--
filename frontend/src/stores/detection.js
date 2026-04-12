@@ -161,6 +161,11 @@ export const useDetectionStore = defineStore("detection", () => {
     return `Bearer ${session.access_token}`;
   };
 
+  const extractBearerToken = (authHeader) => {
+    if (typeof authHeader !== "string") return "";
+    return authHeader.replace(/^Bearer\s+/i, "").trim();
+  };
+
   const uploadModel = async (file, name = null, description = null) => {
     try {
       isProcessing.value = true;
@@ -237,6 +242,7 @@ export const useDetectionStore = defineStore("detection", () => {
       formData.append("params", JSON.stringify(detectionParams.value));
 
       const authHeader = await getAuthHeader();
+      const accessToken = extractBearerToken(authHeader);
 
       // 使用 fetch 读取 SSE 流
       const response = await fetch(`${API_URL}/api/detect`, {
@@ -257,42 +263,83 @@ export const useDetectionStore = defineStore("detection", () => {
         throw new Error(detail);
       }
 
-      // 读取 SSE 流
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
       let result = null;
+      const contentType = response.headers?.get?.("content-type") || "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      if (contentType.includes("application/json")) {
+        // 兼容当前后端返回 JSON 的协议
+        result = await response.json();
+        detectionProgress.value = {
+          percent: 100,
+          message: "识别完成！",
+          stage: "result",
+          current: 0,
+          total: 0,
+        };
+      } else {
+        // 兼容 SSE 流式协议
+        const reader = response.body?.getReader?.();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
 
-        buffer += decoder.decode(value, { stream: true });
+        if (!reader) {
+          throw new Error("识别响应为空，请重试");
+        }
 
-        // SSE 格式：每条消息以 \n\n 结尾
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop(); // 最后一段可能不完整，保留
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data:")) continue;
-          const jsonStr = line.slice(5).trim();
-          if (!jsonStr) continue;
+          buffer += decoder.decode(value, { stream: true });
 
-          let event;
+          // SSE 格式：每条消息以 \n\n 结尾
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop(); // 最后一段可能不完整，保留
+
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith("data:")) continue;
+            const jsonStr = line.slice(5).trim();
+            if (!jsonStr) continue;
+
+            let event;
+            try {
+              event = JSON.parse(jsonStr);
+            } catch (_) {
+              continue;
+            }
+
+            if (event.stage === "error") {
+              throw new Error(event.message || "识别过程中发生错误");
+            }
+
+            if (event.stage === "result") {
+              // 最终结果
+              result = event.data;
+              detectionProgress.value = {
+                percent: 100,
+                message: "识别完成！",
+                stage: "result",
+                current: 0,
+                total: 0,
+              };
+            } else {
+              // 进度更新
+              detectionProgress.value = {
+                percent: event.percent ?? detectionProgress.value.percent,
+                message: event.message ?? "",
+                stage: event.stage ?? "",
+                current: event.current ?? 0,
+                total: event.total ?? 0,
+              };
+            }
+          }
+        }
+
+        // 兜底：某些网关会把 JSON 当普通文本返回（非 SSE）
+        if (!result && buffer.trim()) {
           try {
-            event = JSON.parse(jsonStr);
-          } catch (_) {
-            continue;
-          }
-
-          if (event.stage === "error") {
-            throw new Error(event.message || "识别过程中发生错误");
-          }
-
-          if (event.stage === "result") {
-            // 最终结果
-            result = event.data;
+            result = JSON.parse(buffer.trim());
             detectionProgress.value = {
               percent: 100,
               message: "识别完成！",
@@ -300,15 +347,8 @@ export const useDetectionStore = defineStore("detection", () => {
               current: 0,
               total: 0,
             };
-          } else {
-            // 进度更新
-            detectionProgress.value = {
-              percent: event.percent ?? detectionProgress.value.percent,
-              message: event.message ?? "",
-              stage: event.stage ?? "",
-              current: event.current ?? 0,
-              total: event.total ?? 0,
-            };
+          } catch (_) {
+            // ignore and let next validation throw
           }
         }
       }
@@ -317,24 +357,39 @@ export const useDetectionStore = defineStore("detection", () => {
         throw new Error("未收到识别结果，请重试");
       }
 
-      console.log("[DEBUG] 后端返回的结果:", result);
+      const resultPayload =
+        result?.data &&
+        typeof result.data === "object" &&
+        !Array.isArray(result.data) &&
+        result.resultUrl === undefined &&
+        result.originalUrlSupabase === undefined
+          ? result.data
+          : result;
+
+      if (resultPayload?.success === false) {
+        throw new Error(
+          resultPayload?.detail || resultPayload?.message || "识别失败",
+        );
+      }
+
+      console.log("[DEBUG] 后端返回的结果:", resultPayload);
 
       // 使用后端返回的URL（优先使用Supabase URL，如果没有则使用本地API URL）
       const originalUrl =
-        result.originalUrlSupabase || URL.createObjectURL(file);
+        resultPayload.originalUrlSupabase || URL.createObjectURL(file);
       const resultUrl =
-        result.resultUrlSupabase ||
-        (await buildProtectedApiUrl(result.resultUrl));
+        resultPayload.resultUrlSupabase ||
+        (await buildProtectedApiUrl(resultPayload.resultUrl, accessToken));
 
       console.log("[DEBUG] 原始图片URL:", originalUrl);
       console.log("[DEBUG] 结果URL:", resultUrl);
 
       // 设置当前结果
       currentResult.value = {
-        ...result,
+        ...resultPayload,
         originalUrl: originalUrl,
         resultUrl: resultUrl,
-        isSupabase: !!result.originalUrlSupabase,
+        isSupabase: !!resultPayload.originalUrlSupabase,
       };
 
       console.log("[DEBUG] 当前结果设置为:", currentResult.value);

@@ -2,7 +2,12 @@ import { supabase } from '../config/supabase'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-const getAccessToken = async () => {
+const getAccessToken = async (tokenOverride) => {
+  const normalizedOverride = typeof tokenOverride === 'string' ? tokenOverride.trim() : ''
+  if (normalizedOverride) {
+    return normalizedOverride
+  }
+
   const { data: { session }, error } = await supabase.auth.getSession()
   if (error || !session?.access_token) {
     throw new Error('未检测到有效的登录会话，请重新登录后重试')
@@ -10,7 +15,7 @@ const getAccessToken = async () => {
   return session.access_token
 }
 
-export const buildProtectedApiUrl = async (pathOrUrl) => {
+export const buildProtectedApiUrl = async (pathOrUrl, tokenOverride) => {
   if (!pathOrUrl) {
     return pathOrUrl
   }
@@ -24,6 +29,6 @@ export const buildProtectedApiUrl = async (pathOrUrl) => {
     return pathOrUrl
   }
 
-  resolvedUrl.searchParams.set('token', await getAccessToken())
+  resolvedUrl.searchParams.set('token', await getAccessToken(tokenOverride))
   return resolvedUrl.toString()
 }

@@ -2896,10 +2896,10 @@ const runRealtimeVideoDetection = async (file) => {
     }
     originalVideoObjectUrl = URL.createObjectURL(file);
     const protectedResultUrl = donePacket.resultUrl
-      ? await buildProtectedApiUrl(donePacket.resultUrl)
+      ? await buildProtectedApiUrl(donePacket.resultUrl, token)
       : "";
     const protectedDownloadUrl = donePacket.downloadUrl
-      ? await buildProtectedApiUrl(donePacket.downloadUrl)
+      ? await buildProtectedApiUrl(donePacket.downloadUrl, token)
       : "";
 
     detectionStore.currentResult = {

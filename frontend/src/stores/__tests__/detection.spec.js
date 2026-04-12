@@ -5,6 +5,9 @@ const getUserMock = vi.fn()
 const getSessionMock = vi.fn()
 const axiosGetMock = vi.fn()
 const axiosDeleteMock = vi.fn()
+const fetchMock = vi.fn()
+
+global.fetch = fetchMock
 
 vi.mock('../../config/supabase', () => ({
   supabase: {
@@ -45,6 +48,7 @@ describe('detection store history cache', () => {
       }
     })
     axiosDeleteMock.mockResolvedValue({ data: { success: true } })
+    fetchMock.mockReset()
   })
 
   it('缓存有效期内重复加载历史记录时不重复请求后端接口', async () => {
@@ -107,5 +111,90 @@ describe('detection store history cache', () => {
     expect(store.historyLoading).toBe(false)
     expect(store.historyError).toBe('')
     expect(store.lastHistorySyncAt).toBeGreaterThan(0)
+  })
+
+  it('识别成功后即使 URL 鉴权拼接失败也不应回退为失败', async () => {
+    const { useDetectionStore } = await import('../detection')
+    const store = useDetectionStore()
+    const ssePayload = [
+      'data: {"stage":"uploading","percent":20,"message":"uploading"}\n\n',
+      'data: {"stage":"result","data":{"resultUrl":"/api/results/demo.jpg","originalUrlSupabase":"https://storage.example.com/original.jpg","resultUrlSupabase":null,"detections":[]}}\n\n'
+    ].join('')
+    const encodedPayload = new TextEncoder().encode(ssePayload)
+    let sent = false
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader() {
+          return {
+            async read() {
+              if (sent) {
+                return { done: true, value: undefined }
+              }
+              sent = true
+              return { done: false, value: encodedPayload }
+            }
+          }
+        }
+      }
+    })
+
+    getSessionMock
+      .mockResolvedValueOnce({
+        data: {
+          session: {
+            access_token: 'token-1'
+          }
+        },
+        error: null
+      })
+      .mockResolvedValueOnce({
+        data: {
+          session: null
+        },
+        error: null
+      })
+
+    const result = await store.runDetection(
+      new File(['demo'], 'demo.jpg', { type: 'image/jpeg' }),
+      'image'
+    )
+
+    expect(result.success).toBe(true)
+    expect(store.currentResult?.resultUrl).toContain('/api/results/demo.jpg')
+    expect(store.requestError).toBe('')
+  })
+
+  it('后端返回 JSON 结果时应直接识别成功并写入当前结果', async () => {
+    const { useDetectionStore } = await import('../detection')
+    const store = useDetectionStore()
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: {
+        get: () => 'application/json; charset=utf-8'
+      },
+      async json() {
+        return {
+          success: true,
+          resultUrl: '/api/results/json-result.jpg',
+          originalUrlSupabase: null,
+          resultUrlSupabase: null,
+          detections: [],
+          description: 'json payload'
+        }
+      }
+    })
+
+    const result = await store.runDetection(
+      new File(['demo'], 'demo.jpg', { type: 'image/jpeg' }),
+      'image'
+    )
+
+    expect(result.success).toBe(true)
+    expect(store.currentResult?.description).toBe('json payload')
+    expect(store.currentResult?.resultUrl).toContain('/api/results/json-result.jpg')
+    expect(store.requestError).toBe('')
   })
 })
