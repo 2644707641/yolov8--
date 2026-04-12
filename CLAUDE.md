@@ -4,101 +4,100 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-YOLOv8 停车位检测应用 — 一个前后端分离的停车位检测平台。后端用 FastAPI + YOLOv8 做推理，前端用 Vue 3 做交互界面。支持图片/视频批量检测和实时摄像头/无线视频流监控。
+YOLOv8 停车位检测应用 — 双端架构：FastAPI 后端负责 YOLOv8 推理与数据持久化，Vue 3 前端负责交互与展示。支持 Supabase 云模式（有 SUPABASE_URL/KEY）和本地 JSON 文件模式（无 Supabase 环境变量时自动降级）。
 
-## Commands
+## Development Commands
 
-**后端：**
+**后端（必须在 `backend/` 目录下执行，所有相对路径依赖此工作目录）：**
 ```bash
-cd backend && uvicorn main:app --reload --port 8000
+cd backend
+.\.venv\Scripts\python -m uvicorn main:app --reload --port 8000   # 启动
+.\.venv\Scripts\python -m pytest test_*.py -v --timeout=60         # 测试
+.\.venv\Scripts\python -m pytest test_auth.py -v --timeout=60      # 单个测试
 ```
-- 必须从 `backend/` 目录启动，代码使用相对路径
-- Python 虚拟环境在 `backend/.venv/` 或项目根 `.venv/`
-- 单个测试：`cd backend && python -m pytest test_auth.py -v --timeout=60`
-- 全部测试：`cd backend && python -m pytest test_*.py -v --timeout=60`
 
 **前端：**
 ```bash
-cd frontend && pnpm dev          # 开发服务器
-cd frontend && pnpm build        # 构建
-cd frontend && pnpm test         # Vitest 单次运行
-cd frontend && pnpm test:watch   # Vitest 监听模式
+cd frontend
+pnpm install        # 安装依赖
+pnpm dev            # 启动 (port 3000, proxy /api → localhost:8000)
+pnpm build          # 构建
+pnpm test           # Vitest 一次性运行
+pnpm test:watch     # Vitest watch 模式
 ```
 
-**一键启动（Windows）：** 双击 `运行项目.bat`，自动检测端口并启动前后端。
+**一键启动（Windows）：** 运行根目录 `运行项目.bat`，同时启动前后端。
 
 ## Architecture
 
 ### 双模式运行机制
 
-应用根据环境变量自动选择运行模式：
+后端 `config.py` 检查 `SUPABASE_URL` + `SUPABASE_KEY` 是否存在：
+- **云模式**：认证走 Supabase Auth + JWT 验证，文件存 Supabase Storage，历史记录存 Supabase 表
+- **本地模式**：认证跳过（无需 JWT），文件存本地 `uploads/` + `results/`，历史记录存 `runtime/history.json`，用户设置存 `runtime/user-settings.json`
 
-- **Supabase 云模式**：配置了 `SUPABASE_URL` + `SUPABASE_KEY` 时激活。文件存储、用户认证、模型权重管理走 Supabase。
-- **本地 JSON 模式**：未配置 Supabase 时自动降级。历史记录和设置存储在 `backend/runtime/` 下的 JSON 文件中，认证依赖 JWT 本地校验。
+前端在 `supabase.js` 初始化时**硬性要求** `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`，所以本地模式仍需配置 Supabase 前端变量（仅用于 Auth 登录流程），后端可无 Supabase。
 
-这个决策贯穿整个后端，几乎所有 service 都有 `if supabase_client` 的分支逻辑。
+### 后端关键数据流
 
-### 后端结构 (`backend/`)
+```
+Request → auth.py (JWT 校验) → routes.py → detection.py (推理) → storage.py (云) / local_state.py (本地)
+```
 
-- `main.py` — FastAPI 入口，初始化 Supabase 客户端、加载本地设置、注册路由
-- `app/core/config.py` — `Settings` dataclass，所有配置项的唯一定义处；`BASE_DIR` 指向项目根目录
-- `app/core/pytorch_patch.py` — PyTorch 兼容性补丁，**必须在 import ultralytics 之前执行**（`ensure_torch_patch()` 在 `detection.py` 顶层调用）
-- `app/api/routes.py` — 路由聚合，将 6 个子路由模块挂载到主 router
-- `app/api/common.py` — 共享工具：认证解析、模型路径解析、本地存储策略构建、清理设置管理
-- `app/services/detection.py` — 核心：YOLOv8 推理引擎，asyncio.Semaphore 控制并发（默认 2），支持 SSE 进度回调
-- `app/services/live_stream.py` — 实时视频流：RTSP/MJPEG 连接与帧读取
-- `app/services/local_state.py` — 本地 JSON 状态读写，线程安全（threading.Lock）
-- `app/services/storage.py` — Supabase 文件上传/下载的统一封装
-- `app/services/model_registry.py` — 内存中的用户→模型路径映射（asyncio.Lock）
-- `app/services/model_weights.py` — Supabase 模型权重 CRUD 与缓存下载
-- `app/services/auth.py` — JWT 校验（PyJWT），使用 Supabase JWT Secret
-- `app/services/local_cleanup.py` — 本地历史记录过期清理
+- **模型权重解析优先级**（`common.py:resolve_model_path`）：Supabase 激活权重 > 本地注册权重 > 默认权重
+- **推理并发**：`detection.py` 用 `asyncio.Semaphore(MAX_CONCURRENT_DETECTIONS)` 控制，默认 2
+- **模型 LRU 缓存**：`detection.py` 中 `OrderedDict` 缓存最多 4 个 YOLO 实例，上传新模型时调用 `invalidate_model_cache()` 清除
+- **PyTorch 兼容补丁**：`pytorch_patch.py` 在导入 ultralytics 前应用，修补 `torch.load` 的 `weights_only` 问题和非连续权重张量融合
+- **实时检测**：WebSocket `/ws/detect-live`，客户端发送帧字节或网络流 URL，服务端返回标注帧（4 字节头 + JSON meta + JPEG 二进制）
+- **视频编码**：Windows 优先 `mp4v` 编码器，最终可选 ffmpeg 转 H264
 
-### 前端结构 (`frontend/`)
+### 前端关键设计
 
-- `src/stores/auth.js` — Pinia store：Supabase 认证，含中文错误消息翻译
-- `src/stores/detection.js` — Pinia store：检测参数、模型上传、SSE 流式检测、历史记录缓存（60s TTL）
-- `src/config/supabase.js` — Supabase 客户端初始化，**启动时必须有 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`**
-- `src/utils/protected-url.js` — 给后端 API URL 附加 token 参数用于鉴权
-- `src/router/index.js` — 路由守卫，未认证用户重定向到 `/login`
-- `src/layouts/AppShell.vue` — 需认证页面的公共布局壳
+- **Vite 代理**：`vite.config.js` 将 `/api` 代理到 `localhost:8000`，`envDir: '..'` 读取根目录 `.env`
+- **认证流程**：`stores/auth.js` 使用 Supabase Auth SDK，路由守卫在 `router/index.js` 中检查 `requiresAuth` / `requiresGuest` meta
+- **检测流程**：`stores/detection.js` 通过 `fetch` + SSE 流式接收进度，最终结果支持 JSON 和 SSE 两种协议
+- **受保护的 API URL**：`utils/protected-url.js` 为同源 API 路径附加 `?token=` 查询参数，用于图片/视频结果展示
+- **路由结构**：所有业务页面在 `AppShell` 布局下（需认证），`/login` 为独立页面
 
-前端 `.env` 文件放在**项目根目录**（非 frontend/），`vite.config.js` 通过 `envDir: '..'` 读取。
+### API 路由模块
 
-### API 端点概览
-
-| 路径 | 方法 | 用途 |
-|------|------|------|
-| `/api/upload-model` | POST | 上传模型权重 |
-| `/api/detect` | POST | 批量检测（SSE 流式进度） |
-| `/ws/detect-live` | WebSocket | 实时视频流检测 |
-| `/api/history` | GET | 获取检测历史 |
-| `/api/history/{id}` | DELETE | 删除/归档历史记录 |
-| `/api/history/archive/{id}/restore` | POST | 恢复归档记录 |
-| `/api/settings` | GET/PUT | 读取/更新用户设置 |
-| `/api/system/status` | GET | 系统健康状态 |
-| `/api/model-weights` | GET/POST | 模型权重列表/上传 |
-| `/api/files/{path}` | GET | 受保护的文件访问（需 token 参数） |
-
-### 数据流
-
-1. 前端通过 Supabase JS SDK 完成登录，获取 JWT
-2. 前端请求后端时在 `Authorization: Bearer <token>` 传入 JWT
-3. 后端用 PyJWT + Supabase JWT Secret 校验，提取 `user_id`
-4. 模型路径解析优先级：**Supabase 激活权重** → **本地注册权重** → **默认权重**
-5. 检测结果：Supabase 模式存到 Storage bucket；本地模式存到 `backend/results/`
-
-## Key Conventions
-
-- 后端所有相对路径基于 `backend/` 工作目录（`BASE_DIR = Path(__file__).resolve().parents[3]` 指向项目根）
-- 检测并发由 `MAX_CONCURRENT_DETECTIONS` 环境变量控制，默认 2
-- 视频处理自动尝试 ByteTrack 跟踪，失败后静默降级到逐帧检测
-- 视频编码优先 mp4v（Windows 兼容性），最终可选 ffmpeg 转码为 H264
-- 前端检测进度通过 SSE（Server-Sent Events）推送，非 WebSocket
-- 实时监控用 WebSocket（`/ws/detect-live`）
-- 标注颜色：空车位=绿色，占用车位=红色（由 `_EMPTY_KEYWORDS` 关键词匹配决定）
-- EditorConfig：JS/Vue 缩进 2 空格，Python 缩进 4 空格
+| 路由模块 | 路径前缀 | 功能 |
+|---------|---------|------|
+| `detection_routes.py` | `/api/detect`, `/api/upload-model`, `/ws/detect-live` | 图片/视频检测、模型上传、实时 WebSocket |
+| `history_routes.py` | `/api/history` | 历史记录 CRUD、归档、恢复 |
+| `settings_routes.py` | `/api/settings` | 用户设置、实时偏好、本地清理策略 |
+| `model_weight_routes.py` | `/api/model-weights` | Supabase 模型权重管理 |
+| `files_routes.py` | `/api/results`, `/api/uploads` | 静态文件服务（带 token 鉴权） |
+| `system_routes.py` | `/api/system` | 系统信息、健康检查 |
 
 ## Environment Variables
 
-后端 `.env` 放在项目根目录，`config.py` 通过 `load_dotenv(BASE_DIR / ".env")` 加载。关键变量见 `.env.example`。前端环境变量同理，Vite 从根目录读取（`VITE_` 前缀）。
+根目录 `.env` 同时被前后端使用（后端 `config.py` 加载 `BASE_DIR/.env`，前端 Vite 读取 `VITE_` 前缀变量）：
+
+```bash
+# 前端
+VITE_SUPABASE_URL=       # 必填
+VITE_SUPABASE_ANON_KEY=  # 必填
+VITE_API_URL=http://localhost:8000
+
+# 后端
+SUPABASE_URL=            # 可选，无则本地模式
+SUPABASE_KEY=            # 可选，service_role key
+SUPABASE_JWT_SECRET=     # 可选，本地模式不需要
+MAX_CONCURRENT_DETECTIONS=2
+DEFAULT_MODEL_PATH=default/best.pt
+```
+
+## Coding Conventions
+
+- **EditorConfig**：JS/Vue/JSON 2 空格，Python 4 空格，UTF-8，LF
+- **Vue 组件**：`PascalCase` 文件名（如 `ModelWeights.vue`），Store/工具用小写（如 `auth.js`）
+- **Python**：`snake_case` 函数/模块，`PascalCase` 类
+- **提交**：Conventional Commits（`feat:`, `fix:`, `chore:`，可加 scope 如 `feat(realtime):`）
+- **前端测试**：`*.spec.js` 放在 `__tests__/` 子目录，Vitest + @vue/test-utils + jsdom
+- **后端测试**：`test_*.py` 放在 `backend/` 根目录，pytest
+
+## Deployment
+
+- **Vercel**：`vercel.json` 配置前端 SPA 部署，环境变量通过 Vercel 注入
+- **Docker**：`backend/Dockerfile` 基于 `python:3.10-slim`，含 OpenCV 系统依赖

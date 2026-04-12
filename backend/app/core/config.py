@@ -53,6 +53,9 @@ class Settings:
         default_factory=lambda: {".mp4", ".mov", ".avi", ".mkv"}
     )
     max_concurrent_detections: int = int(os.getenv("MAX_CONCURRENT_DETECTIONS", "2"))
+    ai_api_url: str = os.getenv("AI_API_URL", "")
+    ai_api_key: str = os.getenv("AI_API_KEY", "")
+    ai_model: str = os.getenv("AI_MODEL", "gpt-3.5-turbo")
 
     @property
     def max_upload_size_bytes(self) -> int:

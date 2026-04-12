@@ -25,6 +25,7 @@ from app.api.common import (
     detection_service,
     get_supabase_client,
     get_supabase_client_from_websocket,
+    get_user_settings_store,
     local_state,
     logger,
     model_registry,
@@ -34,7 +35,7 @@ from app.api.common import (
     settings,
     storage_service,
 )
-from app.services import live_runtime_stats, live_stream, validators
+from app.services import ai_analysis, live_runtime_stats, live_stream, validators
 
 router = APIRouter()
 
@@ -188,6 +189,8 @@ async def detect(
             detections,
             elapsed,
             description,
+            img_width,
+            img_height,
         ) = await detection_service.run_detection(
             user_id=user_id,
             model_path=model_path,
@@ -258,6 +261,19 @@ async def detect(
             )
 
         metrics = detection_service.build_result_metrics(detections, type)
+
+        # 启发式空间分析（毫秒级，同步返回）
+        ai_analysis_result = None
+        try:
+            spatial = ai_analysis.analyze_spatial_distribution(
+                detections=detections,
+                img_width=img_width,
+                img_height=img_height,
+            )
+            ai_analysis_result = {"spatial": spatial, "llm": None}
+        except Exception as exc:
+            logger.warning("启发式空间分析失败（不影响检测结果）: %s", exc)
+
         response_payload = {
             "success": True,
             "resultUrl": local_result_url,
@@ -273,6 +289,9 @@ async def detect(
             "description": description,
             "processTime": elapsed,
             "params": detection_params,
+            "imgWidth": img_width,
+            "imgHeight": img_height,
+            "aiAnalysis": ai_analysis_result,
         }
         return response_payload
     finally:
@@ -295,6 +314,34 @@ def _summarize_live_counts(
         )
     )
     return class_counts_output, peak_targets_per_frame, "frame_peak"
+
+
+def _build_live_ai_summary(class_counts: dict) -> dict | None:
+    """为实时检测 done 消息构建轻量 AI 摘要（仅启发式，不含 LLM）。"""
+    try:
+        empty_count = 0
+        occupied_count = 0
+        for class_name, count in class_counts.items():
+            if ai_analysis._is_empty_class(class_name):
+                empty_count += count
+            else:
+                occupied_count += count
+        if empty_count == 0 and occupied_count == 0:
+            return None
+        return {
+            "spatial": {
+                "totalEmpty": empty_count,
+                "totalOccupied": occupied_count,
+                "summary": (
+                    f"空车位 {empty_count} 个，占用车位 {occupied_count} 个"
+                    if empty_count > 0
+                    else "当前画面中未发现空车位"
+                ),
+            },
+            "llm": None,
+        }
+    except Exception:
+        return None
 
 
 async def _receive_live_message(websocket: WebSocket, timeout: float | None = None):
@@ -421,6 +468,9 @@ async def detect_live(websocket: WebSocket):
                                         f"实时识别完成，共处理 {processed_frames} 帧，"
                                         f"{'估计独立目标' if count_mode == 'tracking_unique' else '单帧峰值目标'} "
                                         f"{unique_target_count} 个，累计检测框 {total_detections} 个。"
+                                    ),
+                                    "aiAnalysis": _build_live_ai_summary(
+                                        class_counts_output,
                                     ),
                                 }
                             )
@@ -621,6 +671,9 @@ async def detect_live(websocket: WebSocket):
                                     f"实时识别完成，共处理 {processed_frames} 帧，"
                                     f"{'估计独立目标' if count_mode == 'tracking_unique' else '单帧峰值目标'} "
                                     f"{unique_target_count} 个，累计检测框 {total_detections} 个。"
+                                ),
+                                "aiAnalysis": _build_live_ai_summary(
+                                    class_counts_output,
                                 ),
                             }
                         )

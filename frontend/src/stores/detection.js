@@ -103,6 +103,12 @@ export const useDetectionStore = defineStore("detection", () => {
   const historyCacheFetchedAt = ref(0);
   const historyLoaded = ref(false);
 
+  // AI 分析状态
+  const aiAnalysisResult = ref(null);
+  const aiAnalysisLoading = ref(false);
+  const aiRetrying = ref(false);
+  const aiRetryCooldown = ref(false);
+
   const updateHistoryState = (userId, items, fetchedAt = Date.now()) => {
     detectionHistory.value = Array.isArray(items) ? items : [];
     historyCacheUserId.value = userId || null;
@@ -392,7 +398,13 @@ export const useDetectionStore = defineStore("detection", () => {
         isSupabase: !!resultPayload.originalUrlSupabase,
       };
 
+      // 自动提取启发式分析结果
+      aiAnalysisResult.value = resultPayload.aiAnalysis || null;
+
       console.log("[DEBUG] 当前结果设置为:", currentResult.value);
+
+      // 异步获取 LLM 分析（不阻塞检测流程）
+      _fetchLlmAnalysis(currentResult.value, authHeader);
 
       // 推送加载历史记录进度
       detectionProgress.value = {
@@ -537,6 +549,85 @@ export const useDetectionStore = defineStore("detection", () => {
     }
   };
 
+  // 异步获取 LLM 分析结果（检测完成后调用，不阻塞 UI）
+  const _fetchLlmAnalysis = async (result, authHeader) => {
+    if (!result?.detections) return;
+    aiAnalysisLoading.value = true;
+    try {
+      const imgWidth = result.imgWidth || 1920;
+      const imgHeight = result.imgHeight || 1080;
+      const response = await fetch(`${API_URL}/api/ai/analyze-llm`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          detections: result.detections,
+          imgWidth,
+          imgHeight,
+        }),
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      // 只更新 LLM 部分，保留已有的启发式结果
+      if (aiAnalysisResult.value && data.llm) {
+        aiAnalysisResult.value = {
+          ...aiAnalysisResult.value,
+          llm: data.llm,
+        };
+      }
+    } catch (error) {
+      console.warn("LLM 异步分析失败:", error);
+    } finally {
+      aiAnalysisLoading.value = false;
+    }
+  };
+
+  // AI 分析重试（带冷却防抖）
+  const retryAiAnalysis = async () => {
+    if (!currentResult.value?.detections) return;
+    if (aiRetrying.value || aiRetryCooldown.value) return;
+    aiRetrying.value = true;
+    try {
+      const authHeader = await getAuthHeader();
+      const imgWidth = currentResult.value.imgWidth || 1920;
+      const imgHeight = currentResult.value.imgHeight || 1080;
+      const response = await fetch(`${API_URL}/api/ai/analyze-llm`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          detections: currentResult.value.detections,
+          imgWidth,
+          imgHeight,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || "AI 分析请求失败");
+      }
+      const data = await response.json();
+      if (aiAnalysisResult.value && data.llm) {
+        aiAnalysisResult.value = {
+          ...aiAnalysisResult.value,
+          llm: data.llm,
+        };
+      }
+    } catch (error) {
+      console.error("AI 分析重试失败:", error);
+    } finally {
+      aiRetrying.value = false;
+      // 3s 冷却期
+      aiRetryCooldown.value = true;
+      setTimeout(() => {
+        aiRetryCooldown.value = false;
+      }, 3000);
+    }
+  };
+
   // 清理缓存（退出登录时使用）
   const clearCache = () => {
     modelFile.value = null;
@@ -546,6 +637,10 @@ export const useDetectionStore = defineStore("detection", () => {
     requestError.value = "";
     historyLoading.value = false;
     historyError.value = "";
+    aiAnalysisResult.value = null;
+    aiAnalysisLoading.value = false;
+    aiRetrying.value = false;
+    aiRetryCooldown.value = false;
     // 重置参数到默认值
     detectionParams.value = { ...defaultDetectionParams };
     realtimePrefs.value = { ...defaultRealtimePrefs };
@@ -566,6 +661,10 @@ export const useDetectionStore = defineStore("detection", () => {
     historyLoading,
     historyError,
     lastHistorySyncAt,
+    aiAnalysisResult,
+    aiAnalysisLoading,
+    aiRetrying,
+    aiRetryCooldown,
     updateDefaults,
     updateRealtimePrefs,
     initRealtimeFromBackend,
@@ -573,6 +672,7 @@ export const useDetectionStore = defineStore("detection", () => {
     runDetection,
     loadHistory,
     deleteHistory,
+    retryAiAnalysis,
     clearCache,
   };
 });

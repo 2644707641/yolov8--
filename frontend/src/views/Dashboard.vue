@@ -1633,6 +1633,17 @@
                     </div>
                   </div>
 
+                  <!-- AI 智能分析 -->
+                  <AiAnalysisPanel
+                    v-if="detectionStore.aiAnalysisResult"
+                    :analysis="detectionStore.aiAnalysisResult"
+                    :loading="detectionStore.aiAnalysisLoading"
+                    :retrying="detectionStore.aiRetrying"
+                    :cooldown="detectionStore.aiRetryCooldown"
+                    :llm-loading="detectionStore.aiAnalysisLoading"
+                    @retry="detectionStore.retryAiAnalysis()"
+                  />
+
                   <div class="grid gap-6 lg:grid-cols-2">
                     <div class="glass-panel group overflow-hidden p-5">
                       <div class="flex items-center justify-between">
@@ -2269,6 +2280,7 @@ import { useAuthStore } from "../stores/auth";
 import { useDetectionStore } from "../stores/detection";
 import { supabase } from "../config/supabase";
 import { buildProtectedApiUrl } from "../utils/protected-url";
+import AiAnalysisPanel from "../components/AiAnalysisPanel.vue";
 
 const authStore = useAuthStore();
 const detectionStore = useDetectionStore();

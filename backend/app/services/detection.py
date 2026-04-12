@@ -22,7 +22,7 @@ from ultralytics import YOLO  # noqa: E402
 
 from app.services import system_monitor
 
-DetectionResult = Tuple[Path, List[dict], float, str]
+DetectionResult = Tuple[Path, List[dict], float, str, int, int]
 ProgressCallback = Any  # Callable[[dict], None]
 LiveFrameResult = Tuple[bytes, List[dict], float]
 LiveFrameInferenceResult = Tuple[np.ndarray, List[dict], float]
@@ -341,7 +341,7 @@ def _process_detection_sync(
     start_time = time.time()
 
     if file_type == "image":
-        result_path, detections, description = _detect_image(
+        result_path, detections, description, img_w, img_h = _detect_image(
             model=model,
             user_id=user_id,
             file_path=file_path,
@@ -351,7 +351,7 @@ def _process_detection_sync(
             on_progress=on_progress,
         )
     else:
-        result_path, detections, description = _detect_video(
+        result_path, detections, description, img_w, img_h = _detect_video(
             model=model,
             user_id=user_id,
             file_path=file_path,
@@ -363,7 +363,7 @@ def _process_detection_sync(
 
     elapsed = time.time() - start_time
     logger.info("检测完成: user=%s 用时=%.2fs", user_id, elapsed)
-    return result_path, detections, elapsed, description
+    return result_path, detections, elapsed, description, img_w, img_h
 
 
 def _normalize_params(raw: Dict) -> Dict:
@@ -523,7 +523,7 @@ def _detect_image(
     detection_params: Dict,
     logger,
     on_progress=None,
-) -> Tuple[Path, List[dict], str]:
+) -> Tuple[Path, List[dict], str, int, int]:
     if on_progress:
         on_progress(
             {
@@ -586,7 +586,9 @@ def _detect_image(
         )
 
     description = _generate_description(detections, "image")
-    return result_path, detections, description
+    # 从原始图像获取实际尺寸
+    img_h, img_w = results[0].orig_img.shape[:2]
+    return result_path, detections, description, img_w, img_h
 
 
 def _detect_video(
@@ -598,7 +600,7 @@ def _detect_video(
     detection_params: Dict,
     logger,
     on_progress=None,
-) -> Tuple[Path, List[dict], str]:
+) -> Tuple[Path, List[dict], str, int, int]:
     cap = cv2.VideoCapture(str(file_path))
     if not cap.isOpened():
         raise RuntimeError("无法读取视频文件")
@@ -751,7 +753,7 @@ def _detect_video(
         )
 
     description = _generate_description(detections, "video")
-    return result_path, detections, description
+    return result_path, detections, description, width, height
 
 
 def _create_video_writer(result_path, fps, width, height, logger):
