@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.common import (
     auth_service,
@@ -19,9 +19,9 @@ router = APIRouter()
 
 
 class AnalysisRequest(BaseModel):
-    detections: list[dict]
-    imgWidth: int = 1920
-    imgHeight: int = 1080
+    detections: list[dict] = Field(..., min_length=1, max_length=2000)
+    imgWidth: int = Field(1920, ge=1, le=10000)
+    imgHeight: int = Field(1080, ge=1, le=10000)
 
 
 @router.post("/api/ai/analyze")

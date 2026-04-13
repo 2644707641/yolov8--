@@ -35,7 +35,13 @@ from app.api.common import (
     settings,
     storage_service,
 )
-from app.services import ai_analysis, live_runtime_stats, live_stream, validators
+from app.services import (
+    ai_analysis,
+    live_runtime_stats,
+    live_stream,
+    system_monitor,
+    validators,
+)
 
 router = APIRouter()
 
@@ -184,21 +190,30 @@ async def detect(
                 detail="请先上传模型文件或确保默认权重已配置",
             )
 
-        (
-            result_path,
-            detections,
-            elapsed,
-            description,
-            img_width,
-            img_height,
-        ) = await detection_service.run_detection(
-            user_id=user_id,
-            model_path=model_path,
-            file_path=input_path,
-            file_type=type,
-            params=detection_params,
-            result_dir=settings.result_dir,
-            logger=logger,
+        try:
+            (
+                result_path,
+                detections,
+                elapsed,
+                description,
+                img_width,
+                img_height,
+            ) = await detection_service.run_detection(
+                user_id=user_id,
+                model_path=model_path,
+                file_path=input_path,
+                file_type=type,
+                params=detection_params,
+                result_dir=settings.result_dir,
+                logger=logger,
+            )
+        except Exception:
+            system_monitor.record_detection_task(success=False)
+            raise
+
+        system_monitor.record_detection_task(
+            success=True,
+            process_time_seconds=elapsed,
         )
 
         original_url = None
@@ -395,6 +410,7 @@ async def detect_live(websocket: WebSocket):
     stream_read_failures = 0
     frame_errors = 0
 
+    system_monitor.increment_live_streams()
     try:
         while True:
             if (
@@ -830,6 +846,7 @@ async def detect_live(websocket: WebSocket):
         except Exception:
             pass
     finally:
+        system_monitor.decrement_live_streams()
         if stream_capture is not None:
             try:
                 stream_capture.release()

@@ -34,8 +34,12 @@ _ZONE_ORDER = [
 ]
 
 
-def _is_empty_class(class_name: str) -> bool:
+def _is_empty_class(class_name: Any) -> bool:
     """判断检测类别是否为空车位。"""
+    if class_name is None:
+        return False
+    if not isinstance(class_name, str):
+        class_name = str(class_name)
     name_lower = class_name.lower()
     return any(kw in name_lower for kw in _EMPTY_KEYWORDS)
 
@@ -48,8 +52,8 @@ def _assign_zone(
     """将 bbox 中心点映射到 3x3 九宫格区域 (row, col)。"""
     cx = (bbox[0] + bbox[2]) / 2
     cy = (bbox[1] + bbox[3]) / 2
-    col = min(2, int(cx / (img_width / 3))) if img_width > 0 else 1
-    row = min(2, int(cy / (img_height / 3))) if img_height > 0 else 1
+    col = min(2, max(0, int(cx / (img_width / 3)))) if img_width > 0 else 1
+    row = min(2, max(0, int(cy / (img_height / 3)))) if img_height > 0 else 1
     return (row, col)
 
 
@@ -92,8 +96,13 @@ def analyze_spatial_distribution(
         bbox = det.get("bbox")
         if not bbox or len(bbox) < 4:
             continue
-        class_name = det.get("class", "未知")
-        zone_key = _assign_zone(bbox, img_width, img_height)
+        try:
+            normalized_bbox = [float(v) for v in bbox[:4]]
+        except (TypeError, ValueError):
+            continue
+
+        class_name = det.get("class") or "未知"
+        zone_key = _assign_zone(normalized_bbox, img_width, img_height)
         if zone_key not in zone_stats:
             zone_stats[zone_key] = {"empty": 0, "occupied": 0, "total": 0}
         if _is_empty_class(class_name):
@@ -110,30 +119,44 @@ def analyze_spatial_distribution(
     total_occupied = 0
     scored_zones: List[Dict[str, Any]] = []
 
+    # 找出最大空车位数，用于归一化
+    max_empty_count = 0
     for zone_key, stats in zone_stats.items():
         total_empty += stats["empty"]
         total_occupied += stats["occupied"]
+        if stats["empty"] > max_empty_count:
+            max_empty_count = stats["empty"]
+
+    for zone_key, stats in zone_stats.items():
         vacancy_rate = stats["empty"] / stats["total"] if stats["total"] > 0 else 0.0
+        # 综合评分：空闲率权重 0.6 + 空车位绝对数量归一化权重 0.4
+        # 归一化避免除零，max 为 1 时直接用 1.0
+        empty_norm = stats["empty"] / max_empty_count if max_empty_count > 0 else 0.0
+        score = vacancy_rate * 0.6 + empty_norm * 0.4
         scored_zones.append({
             "key": zone_key,
             "empty": stats["empty"],
             "occupied": stats["occupied"],
             "total": stats["total"],
             "vacancyRate": vacancy_rate,
+            "score": score,
         })
 
-    # 排序：有空车位的区域按空闲率降序，空闲率相同按空车位数降序
+    # 排序：有空车位的区域按综合评分降序，评分相同按空车位数降序
     has_empty = [z for z in scored_zones if z["empty"] > 0]
-    has_empty.sort(key=lambda z: (z["vacancyRate"], z["empty"]), reverse=True)
+    has_empty.sort(key=lambda z: (z["score"], z["empty"]), reverse=True)
 
     best_zone_key = has_empty[0]["key"] if has_empty else None
     best_empty_count = has_empty[0]["empty"] if has_empty else 0
     best_occupied_count = has_empty[0]["occupied"] if has_empty else 0
 
-    # 推荐区域：空闲率 >= 50% 的区域，或空车位最多的前 3 个区域
+    # 推荐区域：综合评分 >= 0.4 且空车位 >= 2，或空车位最多的前 2 个区域
     recommended_keys = []
     for z in has_empty:
-        if z["vacancyRate"] >= 0.5 or len(recommended_keys) < 3:
+        if z["score"] >= 0.4 and z["empty"] >= 2:
+            recommended_keys.append(z["key"])
+        elif len(recommended_keys) < 2:
+            # 兜底：至少推荐空车位最多的前 2 个
             recommended_keys.append(z["key"])
 
     # 构建有序 zones 列表
@@ -146,10 +169,12 @@ def analyze_spatial_distribution(
         is_recommended = zone_key in recommended_keys
         is_best = zone_key == best_zone_key and best_empty_count > 0
 
-        # 推荐等级
+        # 推荐等级（综合评分 + 绝对数量分档）
         if is_best:
             recommendation = "强烈推荐"
-        elif is_recommended and vacancy_rate >= 0.5:
+        elif is_recommended and vacancy_rate >= 0.5 and stats["empty"] >= 2:
+            recommendation = "推荐"
+        elif is_recommended and stats["empty"] >= 2:
             recommendation = "推荐"
         elif stats["empty"] > 0:
             recommendation = "有空位"
@@ -207,8 +232,8 @@ def analyze_spatial_distribution(
 _LLM_SYSTEM_PROMPT = (
     "你是一个智能停车位分析助手。根据以下各区域的车位占用数据，给出实用的停车推荐。\n"
     "要求：\n"
-    "1. 综合考虑空车位数和空闲率，推荐最适合停车的区域\n"
-    "2. 空车位多但占用也多的区域（拥挤）优先级低于空车位稍少但更空闲的区域\n"
+    "1. 综合考虑空闲率和空车位绝对数量：空闲率高且空车位多的区域最推荐；空闲率高但只有1个空位的区域优先级较低；空车位多但占用也多（拥挤）的区域优先级也较低\n"
+    "2. 只有1个空位的区域应标注为\"有空位但不作为首选\"，不宜推荐为优先\n"
     "3. 如果多个区域都空闲，给出最优选择和备选区域\n"
     "4. 给出明确的方位建议（如\"建议优先前往左侧，右下也可作为备选\"）\n"
     "5. 回答不超过 200 字\n"
@@ -221,7 +246,7 @@ _LLM_USER_PROMPT_TEMPLATE = (
     "总空车位：{total_empty}\n"
     "总占用车位：{total_occupied}\n"
     "最空闲区域：{best_zone}（{best_empty_count}个空车位）\n\n"
-    "请综合空闲率分析，给出停车建议："
+    "请综合考虑空闲率和空车位绝对数量给出停车建议。只有1个空位的区域不应作为首选推荐："
 )
 
 

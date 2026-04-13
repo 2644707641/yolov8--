@@ -103,10 +103,10 @@
                 </span>
                 <div class="flex-1">
                   <span class="text-base font-semibold leading-tight"
-                    >上传模型权重</span
+                    >选择模型权重</span
                   >
                   <p class="mt-1 text-xs text-slate-300/70">
-                    导入 YOLOv8 自定义权重文件
+                    从已有模型权重中选择当前识别使用的模型
                   </p>
                 </div>
                 <svg
@@ -303,7 +303,7 @@
         <div class="mx-auto w-full max-w-6xl">
           <!-- 步骤切换容器 -->
           <div class="relative" style="min-height: 600px">
-            <!-- 步骤1：上传模型权重 -->
+            <!-- 步骤1：选择模型权重 -->
             <Transition :name="slideDirection" mode="out-in">
               <div
                 v-if="currentStep === 1"
@@ -316,233 +316,13 @@
                   <div>
                     <p class="section-title">Step 01</p>
                     <h2 class="mt-3 text-2xl font-semibold text-white">
-                      上传模型权重
+                      选择模型权重
                     </h2>
                     <p class="mt-2 text-sm text-slate-300/80">
-                      上传你的 YOLOv8 模型文件（支持 .pt /
-                      .pth），系统会自动完成版本校验与安全存储。
+                      从你的权重库中选择 YOLOv8 模型权重，选中后即可进入下一步上传识别素材。
                     </p>
-                  </div>
-                  <button
-                    v-if="detectionStore.modelUploaded"
-                    class="btn-secondary self-start sm:self-auto"
-                    @click="currentStep = 2"
-                  >
-                    继续下一步
-                  </button>
-                </div>
-
-                <div
-                  @dragover.prevent
-                  @drop.prevent="handleModelDrop"
-                  class="group relative rounded-3xl border-2 border-dashed border-white/15 bg-white/5 p-12 text-center transition-all duration-300 hover:border-primary-400/70 hover:bg-white/10"
-                  @click="modelInput?.click()"
-                >
-                  <input
-                    ref="modelInput"
-                    type="file"
-                    accept=".pt,.pth"
-                    @change="handleModelSelect"
-                    class="hidden"
-                  />
-                  <div
-                    v-if="isUploadingModel"
-                    class="flex flex-col items-center gap-3 text-primary-200"
-                  >
-                    <div
-                      class="h-14 w-14 animate-spin rounded-full border-2 border-primary-500/40 border-t-transparent"
-                    ></div>
-                    <p class="text-sm">正在上传模型...</p>
-                  </div>
-                  <div
-                    v-else-if="
-                      !detectionStore.modelUploaded && !selectedModelName
-                    "
-                    class="space-y-4 text-slate-300/85"
-                  >
-                    <div
-                      class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-primary-200"
-                    >
-                      <svg
-                        class="h-8 w-8"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="1.5"
-                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6H16a5 5 0 011 9.9m-4-2.9l-3-3m0 0l-3 3m3-3v12"
-                        ></path>
-                      </svg>
-                    </div>
-                    <p class="text-lg font-medium text-white/90">
-                      点击或拖动模型文件到此处
-                    </p>
-                    <p class="text-sm text-slate-400/80">支持格式：.pt、.pth</p>
-                  </div>
-                  <div
-                    v-else-if="detectionStore.modelUploaded"
-                    class="space-y-3 text-emerald-200"
-                  >
-                    <svg
-                      class="mx-auto h-12 w-12 text-emerald-300"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M5 13l4 4L19 7"
-                      ></path>
-                    </svg>
-                    <p class="text-base font-semibold text-white">
-                      模型已上传完毕
-                    </p>
-                    <p class="text-sm text-emerald-200/80">
-                      {{ detectionStore.modelFile?.name || selectedModelName }}
-                    </p>
-                    <button
-                      type="button"
-                      @click.stop="reselectModel"
-                      class="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-300/60 bg-transparent px-4 py-1.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/20"
-                    >
-                      <svg
-                        class="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="1.5"
-                          d="M4 4v5h.582m15.45 2A8.5 8.5 0 1111.5 3v0"
-                        ></path>
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="1.5"
-                          d="M12 9v4l2.5 1.5"
-                        ></path>
-                      </svg>
-                      重新选择模型
-                    </button>
-                  </div>
-                  <div v-else class="space-y-3 text-amber-100">
-                    <svg
-                      class="mx-auto h-12 w-12 text-amber-200"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M12 9v2m0 4h.01M5.1 19h13.8c1.54 0 2.5-1.66 1.73-3L13.73 4a2 2 0 00-3.46 0L3.37 16c-.77 1.34.19 3 1.73 3z"
-                      ></path>
-                    </svg>
-                    <p class="text-sm font-medium text-white/90">
-                      模型已选择，等待上传至后端
-                    </p>
-                    <p class="text-xs text-slate-300/70">
-                      {{ selectedModelName }}
-                    </p>
-                    <button
-                      @click.stop="retryUpload"
-                      class="text-xs font-semibold text-amber-200/90 underline underline-offset-4 hover:text-amber-100"
-                    >
-                      重新上传
-                    </button>
                   </div>
                 </div>
-
-                <div
-                  v-if="detectionStore.modelUploaded"
-                  class="mt-8 flex flex-col gap-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-5 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div class="flex items-center gap-3 text-emerald-100">
-                    <svg
-                      class="h-6 w-6"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                      ></path>
-                    </svg>
-                    <p class="text-sm">模型已就绪，可以继续上传待识别文件。</p>
-                  </div>
-                  <button @click="currentStep = 2" class="btn-primary text-sm">
-                    下一步
-                  </button>
-                </div>
-
-                <div
-                  v-else-if="selectedModelName && !isUploadingModel"
-                  class="mt-8 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-100"
-                >
-                  <p>
-                    模型文件
-                    <span class="font-medium">{{ selectedModelName }}</span>
-                    已选择，点击上方区域上传至后端。
-                  </p>
-                </div>
-
-                <div
-                  v-if="uploadError"
-                  class="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-100"
-                >
-                  <div class="flex items-start gap-3">
-                    <svg
-                      class="h-5 w-5 flex-shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      ></path>
-                    </svg>
-                    <div class="flex-1 space-y-2">
-                      <p class="font-medium">上传失败</p>
-                      <p>{{ uploadError }}</p>
-                      <p class="text-xs text-red-200/80">
-                        请确认后端服务已启动（端口 8000）。
-                      </p>
-                    </div>
-                    <button
-                      @click="uploadError = null"
-                      class="text-red-200 hover:text-red-100"
-                    >
-                      <svg
-                        class="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M6 18L18 6M6 6l12 12"
-                        ></path>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
                 <!-- 已有权重列表 -->
                 <div
                   v-if="loadingWeights && availableWeights.length === 0"
@@ -556,7 +336,7 @@
                 <div v-else-if="availableWeights.length > 0" class="mt-8">
                   <div class="mb-4 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-white">
-                      或选择已有权重
+                      选择已有权重
                     </h3>
                     <button
                       @click="loadUserWeights"
@@ -682,10 +462,35 @@
                       </svg>
                     </router-link>
                   </div>
+
+                  <div
+                    v-if="detectionStore.modelUploaded"
+                    class="mt-6 flex justify-center"
+                  >
+                    <button
+                      class="btn-secondary inline-flex min-w-[9rem] items-center justify-center whitespace-nowrap"
+                      @click="currentStep = 2"
+                    >
+                      继续下一步
+                    </button>
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6 text-center"
+                >
+                  <p class="text-sm text-slate-300">
+                    当前暂无可用模型权重，请先前往权重管理页添加模型。
+                  </p>
+                  <router-link
+                    to="/model-weights"
+                    class="mt-4 inline-flex items-center gap-2 rounded-full border border-primary-300/50 bg-primary-500/15 px-4 py-2 text-xs font-semibold text-primary-200 transition hover:bg-primary-500/25"
+                  >
+                    去管理模型权重
+                  </router-link>
                 </div>
               </div>
             </Transition>
-
             <!-- 步骤2：上传文件 -->
             <Transition :name="slideDirection" mode="out-in">
               <div
@@ -1278,7 +1083,6 @@
                 </div>
               </div>
             </Transition>
-
             <!-- 步骤4：识别结果 -->
             <Transition :name="slideDirection" mode="out-in">
               <div
@@ -2110,90 +1914,6 @@
         </div>
       </div>
 
-      <!-- 权重上传确认弹窗 -->
-      <div
-        v-if="showWeightDialog"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-        @click.self="cancelUploadWeight"
-      >
-        <div
-          class="relative w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-8 shadow-2xl"
-        >
-          <h3 class="text-xl font-semibold text-white">上传权重文件</h3>
-          <p class="mt-2 text-sm text-slate-300">
-            文件：<span class="font-medium text-primary-300">{{
-              selectedModelName
-            }}</span>
-          </p>
-
-          <div class="mt-6 space-y-4">
-            <div>
-              <label class="mb-2 block text-sm font-medium text-slate-300">
-                权重名称（可选）
-              </label>
-              <input
-                v-model="modelWeightName"
-                type="text"
-                placeholder="留空则使用文件名"
-                class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-400 transition-all focus:border-primary-400/50 focus:bg-white/8 focus:outline-none"
-              />
-              <p class="mt-1 text-xs text-slate-400">
-                如果留空，将使用原文件名：{{ selectedModelName }}
-              </p>
-            </div>
-
-            <div>
-              <label class="mb-2 block text-sm font-medium text-slate-300">
-                权重描述（可选）
-              </label>
-              <input
-                v-model="modelWeightDescription"
-                type="text"
-                placeholder="例如：训练于2024年数据集，精度95%"
-                class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-400 transition-all focus:border-primary-400/50 focus:bg-white/8 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div class="mt-6 flex gap-3">
-            <button
-              @click="cancelUploadWeight"
-              class="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-white/10"
-            >
-              取消
-            </button>
-            <button
-              @click="confirmUploadWeight"
-              class="flex-1 rounded-xl bg-primary-500 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-primary-600"
-            >
-              确认上传
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 权重上传中弹窗 -->
-      <div
-        v-if="isUploadingModel"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      >
-        <div
-          class="relative rounded-3xl border border-white/10 bg-slate-900 p-8 shadow-2xl"
-        >
-          <div class="flex flex-col items-center gap-4">
-            <div
-              class="h-16 w-16 animate-spin rounded-full border-4 border-primary-500/20 border-t-primary-400"
-            ></div>
-            <div class="text-center">
-              <h3 class="text-xl font-semibold text-white">权重正在上传中</h3>
-              <p class="mt-2 text-sm text-slate-400">
-                请稍等，正在上传到云端存储...
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- 权重选择加载弹窗 -->
       <div
         v-if="isSelectingWeight"
@@ -2293,13 +2013,7 @@ const fileType = ref("image");
 const selectedFile = ref(null);
 const customFileName = ref("");
 const isEditingFileName = ref(false);
-const selectedModelName = ref("");
-const modelWeightName = ref("");
-const modelWeightDescription = ref("");
-const isUploadingModel = ref(false);
-const uploadError = ref(null);
 const showResetDialog = ref(false);
-let pendingModelFile = null;
 
 // 视频实时识别相关
 const detectionMode = ref("realtime");
@@ -2402,7 +2116,6 @@ const availableWeights = ref([]);
 const loadingWeights = ref(false);
 const selectedWeightId = ref(null);
 const isSelectingWeight = ref(false);
-const showWeightDialog = ref(false);
 const workspaceNotice = ref(null);
 
 const showWorkspaceNotice = (message, type = "error") => {
@@ -2458,7 +2171,6 @@ const applySelectedFile = (file) => {
 };
 
 // 文件输入框的引用
-const modelInput = ref(null);
 const fileInput = ref(null);
 
 // 预览相关状态
@@ -2473,93 +2185,6 @@ const dragStart = ref({ x: 0, y: 0 });
 const originalVideoRef = ref(null);
 const resultVideoRef = ref(null);
 const isVideoPlaying = ref(false);
-
-const handleModelDrop = (e) => {
-  const file = e.dataTransfer.files[0];
-  if (file && (file.name.endsWith(".pt") || file.name.endsWith(".pth"))) {
-    showWeightConfirmDialog(file);
-  }
-};
-
-const handleModelSelect = (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    showWeightConfirmDialog(file);
-  }
-};
-
-// 显示权重确认弹窗
-const showWeightConfirmDialog = (file) => {
-  pendingModelFile = file;
-  selectedModelName.value = file.name;
-  showWeightDialog.value = true;
-  // 重置输入框
-  modelWeightName.value = "";
-  modelWeightDescription.value = "";
-};
-
-// 确认上传权重
-const confirmUploadWeight = async () => {
-  if (!pendingModelFile) return;
-
-  // 关闭确认弹窗，显示加载弹窗
-  showWeightDialog.value = false;
-  isUploadingModel.value = true;
-  uploadError.value = null;
-  clearWorkspaceNotice();
-
-  try {
-    const result = await detectionStore.uploadModel(
-      pendingModelFile,
-      modelWeightName.value || null,
-      modelWeightDescription.value || null,
-    );
-    if (!result.success) {
-      uploadError.value = result.error || "上传失败，请检查网络连接";
-    } else {
-      // 上传成功后重新加载权重列表
-      await loadUserWeights();
-    }
-  } catch (error) {
-    uploadError.value = error.message || "上传失败，请确保后端服务已启动";
-    console.error("模型上传错误:", error);
-  } finally {
-    isUploadingModel.value = false;
-    pendingModelFile = null;
-  }
-};
-
-// 取消上传
-const cancelUploadWeight = () => {
-  showWeightDialog.value = false;
-  pendingModelFile = null;
-  selectedModelName.value = "";
-  modelWeightName.value = "";
-  modelWeightDescription.value = "";
-};
-
-const retryUpload = () => {
-  if (pendingModelFile) {
-    showWeightDialog.value = true;
-  }
-};
-
-const reselectModel = () => {
-  pendingModelFile = null;
-  selectedModelName.value = "";
-  modelWeightName.value = "";
-  modelWeightDescription.value = "";
-  uploadError.value = null;
-  clearWorkspaceNotice();
-  selectedWeightId.value = null;
-  detectionStore.modelFile = null;
-  detectionStore.modelUploaded = false;
-  if (modelInput.value) {
-    modelInput.value.value = "";
-  }
-  // 重新加载权重列表以更新状态
-  loadUserWeights();
-};
 
 const handleFileSelect = (e) => {
   const file = e.target.files?.[0];
@@ -3121,18 +2746,10 @@ const confirmReset = () => {
 
   // 重置本地状态
   clearSelectedFile();
-  selectedModelName.value = "";
-  isUploadingModel.value = false;
-  uploadError.value = null;
-  pendingModelFile = null;
   selectedWeightId.value = null;
   fileType.value = "image";
   detectionMode.value = "batch";
 
-  // 清空文件输入框的value（关键修复 - 解决重新选择文件无反应的问题）
-  if (modelInput.value) {
-    modelInput.value.value = "";
-  }
   // 重置store中的状态
   detectionStore.modelFile = null;
   detectionStore.modelUploaded = false;
@@ -3220,7 +2837,6 @@ const selectExistingWeight = async (weight) => {
     if (response.ok) {
       // 更新本地状态
       selectedWeightId.value = weight.id;
-      selectedModelName.value = weight.name;
       detectionStore.modelUploaded = true;
 
       // 重新加载权重列表

@@ -12,8 +12,10 @@ _detection_stats_lock = threading.Lock()
 _detection_stats: Dict[str, Any] = {
     "total_tasks": 0,
     "failed_tasks": 0,
+    "total_inference_seconds": 0.0,
     "queue_backlog": 0,
     "active_tasks": 0,
+    "active_live_streams": 0,
 }
 
 
@@ -24,7 +26,7 @@ def get_system_status() -> Dict[str, Any]:
     - memory_used: 内存占用 (GB)
     - memory_percent: 内存占用百分比
     - queue_backlog: 队列积压数
-    - error_rate: 错误率 (%)
+    - success_rate: 成功率 (%)
     """
     memory = psutil.virtual_memory()
     memory_used_gb = memory.used / (1024**3)
@@ -36,7 +38,13 @@ def get_system_status() -> Dict[str, Any]:
         total = _detection_stats["total_tasks"]
         failed = _detection_stats["failed_tasks"]
         active = _detection_stats["active_tasks"]
-        error_rate = (failed / total * 100) if total > 0 else 0.0
+        success_tasks = max(0, total - failed)
+        total_inference_seconds = float(_detection_stats["total_inference_seconds"])
+        avg_inference_time = (
+            total_inference_seconds / success_tasks if success_tasks > 0 else 0.0
+        )
+        active_live_streams = _detection_stats["active_live_streams"]
+        success_rate = ((total - failed) / total * 100) if total > 0 else 100.0
 
     queue_backlog = max(0, active - 2)
 
@@ -46,7 +54,9 @@ def get_system_status() -> Dict[str, Any]:
         "memory_used": round(memory_used_gb, 1),
         "memory_percent": round(memory_percent, 1),
         "queue_backlog": queue_backlog,
-        "error_rate": round(error_rate, 1),
+        "success_rate": round(success_rate, 1),
+        "avg_inference_time": round(avg_inference_time, 3),
+        "active_live_streams": int(active_live_streams),
     }
 
 
@@ -88,12 +98,17 @@ def _get_gpu_info() -> Dict[str, Any]:
     }
 
 
-def record_detection_task(success: bool) -> None:
-    """记录检测任务结果，用于计算错误率。"""
+def record_detection_task(
+    success: bool,
+    process_time_seconds: float | None = None,
+) -> None:
+    """记录检测任务结果，用于计算成功率。"""
     with _detection_stats_lock:
         _detection_stats["total_tasks"] += 1
         if not success:
             _detection_stats["failed_tasks"] += 1
+        elif process_time_seconds is not None and process_time_seconds >= 0:
+            _detection_stats["total_inference_seconds"] += float(process_time_seconds)
 
 
 def update_queue_backlog(count: int) -> None:
@@ -112,3 +127,17 @@ def decrement_active_tasks() -> None:
     """减少活跃任务计数。"""
     with _detection_stats_lock:
         _detection_stats["active_tasks"] = max(0, _detection_stats["active_tasks"] - 1)
+
+
+def increment_live_streams() -> None:
+    """增加实时在线流计数。"""
+    with _detection_stats_lock:
+        _detection_stats["active_live_streams"] += 1
+
+
+def decrement_live_streams() -> None:
+    """减少实时在线流计数。"""
+    with _detection_stats_lock:
+        _detection_stats["active_live_streams"] = max(
+            0, _detection_stats["active_live_streams"] - 1
+        )

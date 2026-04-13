@@ -6,6 +6,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -24,6 +25,7 @@ from app.core.config import settings
 from app.services import local_cleanup
 from app.services import detection as detection_service
 from app.services import model_registry
+from app.services import system_monitor
 
 logger = logging.getLogger("yolov8.test")
 
@@ -107,13 +109,44 @@ def patched_run_detection(result_dir: Path):
         result_path = result_dir / "result_test-user_1700000000.jpg"
         result_path.write_bytes(b"fake-result")
         detections = [{"class": "car", "confidence": 0.91, "bbox": [1, 2, 3, 4]}]
-        return result_path, detections, 0.12, "检测完成"
+        return result_path, detections, 0.12, "检测完成", 1280, 720
 
     detection_service.run_detection = fake_run_detection
     try:
         yield
     finally:
         detection_service.run_detection = original
+
+
+@contextmanager
+def patched_run_detection_failure():
+    original = detection_service.run_detection
+
+    async def fake_run_detection(**kwargs):
+        raise RuntimeError("mock detection failure")
+
+    detection_service.run_detection = fake_run_detection
+    try:
+        yield
+    finally:
+        detection_service.run_detection = original
+
+
+@contextmanager
+def patched_detection_stats(*, total: int = 0, failed: int = 0):
+    with system_monitor._detection_stats_lock:
+        snapshot = dict(system_monitor._detection_stats)
+        system_monitor._detection_stats["total_tasks"] = total
+        system_monitor._detection_stats["failed_tasks"] = failed
+        system_monitor._detection_stats["total_inference_seconds"] = 0.0
+        system_monitor._detection_stats["queue_backlog"] = 0
+        system_monitor._detection_stats["active_tasks"] = 0
+        system_monitor._detection_stats["active_live_streams"] = 0
+    try:
+        yield
+    finally:
+        with system_monitor._detection_stats_lock:
+            system_monitor._detection_stats.update(snapshot)
 
 
 @contextmanager
@@ -430,6 +463,76 @@ def test_detect_and_history_work_without_supabase_by_using_local_store():
     assert payload["items"][0]["detections"][0]["class"] == "car"
 
 
+def test_detect_success_updates_success_rate_metrics():
+    user_id = "test-user"
+    headers = {"Authorization": f"Bearer {make_token(user_id)}"}
+    image_bytes = b"\x89PNG\r\n\x1a\n"
+
+    with (
+        patched_detection_stats(total=0, failed=0),
+        temporary_jwt_secret("test-secret"),
+        temporary_supabase_client(None),
+        temporary_local_store_paths() as paths,
+    ):
+        model_path = paths["model_dir"] / "demo.pt"
+        model_path.write_bytes(b"fake-model")
+
+        with registered_model(user_id, model_path), patched_run_detection(paths["result_dir"]):
+            client = TestClient(app)
+            detect_response = client.post(
+                "/api/detect",
+                headers=headers,
+                files={"file": ("demo.png", image_bytes, "image/png")},
+                data={
+                    "type": "image",
+                    "params": '{"imgSize":640,"confidence":0.5,"iouThreshold":0.6,"maxDetections":300,"frameSkip":1}',
+                },
+            )
+            assert detect_response.status_code == 200, detect_response.text
+
+            status_response = client.get("/api/system/status")
+
+    assert status_response.status_code == 200, status_response.text
+    payload = status_response.json()
+    assert payload["success"] is True
+    assert payload["data"]["success_rate"] == 100.0
+
+
+def test_detect_failure_updates_success_rate_metrics():
+    user_id = "test-user"
+    headers = {"Authorization": f"Bearer {make_token(user_id)}"}
+    image_bytes = b"\x89PNG\r\n\x1a\n"
+
+    with (
+        patched_detection_stats(total=0, failed=0),
+        temporary_jwt_secret("test-secret"),
+        temporary_supabase_client(None),
+        temporary_local_store_paths() as paths,
+    ):
+        model_path = paths["model_dir"] / "demo.pt"
+        model_path.write_bytes(b"fake-model")
+
+        with registered_model(user_id, model_path), patched_run_detection_failure():
+            client = TestClient(app, raise_server_exceptions=False)
+            detect_response = client.post(
+                "/api/detect",
+                headers=headers,
+                files={"file": ("demo.png", image_bytes, "image/png")},
+                data={
+                    "type": "image",
+                    "params": '{"imgSize":640,"confidence":0.5,"iouThreshold":0.6,"maxDetections":300,"frameSkip":1}',
+                },
+            )
+            assert detect_response.status_code == 500, detect_response.text
+
+            status_response = client.get("/api/system/status")
+
+    assert status_response.status_code == 200, status_response.text
+    payload = status_response.json()
+    assert payload["success"] is True
+    assert payload["data"]["success_rate"] == 0.0
+
+
 def test_local_cleanup_prunes_expired_records_and_unreferenced_files():
     with temporary_local_store_paths() as paths:
         payload = {
@@ -500,6 +603,79 @@ def test_local_cleanup_prunes_expired_records_and_unreferenced_files():
         assert not orphan_result.exists()
 
 
+def test_system_overview_returns_real_stats_for_cards():
+    user_id = "test-user"
+    headers = {"Authorization": f"Bearer {make_token(user_id)}"}
+    now_utc = datetime.now(timezone.utc)
+    today_iso = now_utc.isoformat()
+    yesterday_iso = (now_utc - timedelta(days=1)).isoformat()
+
+    with (
+        patched_detection_stats(total=3, failed=1),
+        temporary_jwt_secret("test-secret"),
+        temporary_supabase_client(None),
+        temporary_local_store_paths() as paths,
+    ):
+        payload = {
+            "user_settings": {},
+            "history_records": [
+                {
+                    "id": "h-1",
+                    "user_id": user_id,
+                    "file_type": "image",
+                    "original_file": "/api/uploads/u1.png",
+                    "result_file": "/api/results/r1.jpg",
+                    "detections": [],
+                    "params": {},
+                    "created_at": today_iso,
+                },
+                {
+                    "id": "h-2",
+                    "user_id": user_id,
+                    "file_type": "video",
+                    "original_file": "/api/uploads/u2.mp4",
+                    "result_file": "/api/results/r2.mp4",
+                    "detections": [],
+                    "params": {},
+                    "created_at": today_iso,
+                },
+                {
+                    "id": "h-3",
+                    "user_id": user_id,
+                    "file_type": "image",
+                    "original_file": "/api/uploads/u3.png",
+                    "result_file": "/api/results/r3.jpg",
+                    "detections": [],
+                    "params": {},
+                    "created_at": yesterday_iso,
+                },
+            ],
+            "history_archives": [],
+        }
+        settings.local_history_store_file.write_text(
+            json.dumps(payload, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        model_path = paths["model_dir"] / "demo.pt"
+        model_path.write_bytes(b"fake-model")
+
+        with registered_model(user_id, model_path):
+            with system_monitor._detection_stats_lock:
+                system_monitor._detection_stats["total_inference_seconds"] = 0.8
+                system_monitor._detection_stats["active_live_streams"] = 2
+            client = TestClient(app)
+            response = client.get("/api/system/overview", headers=headers)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["today_detection_count"] == 2
+    assert body["data"]["avg_inference_time"] == 0.4
+    assert body["data"]["active_model_count"] == 1
+    assert body["data"]["online_stream_count"] == 2
+
+
 def run():
     test_history_list_returns_only_current_user_records()
     test_history_delete_rejects_other_users_record()
@@ -507,7 +683,10 @@ def run():
     test_deleted_history_list_returns_only_active_archives()
     test_restore_deleted_history_moves_record_back_to_main_table()
     test_detect_and_history_work_without_supabase_by_using_local_store()
+    test_detect_success_updates_success_rate_metrics()
+    test_detect_failure_updates_success_rate_metrics()
     test_local_cleanup_prunes_expired_records_and_unreferenced_files()
+    test_system_overview_returns_real_stats_for_cards()
 
 
 if __name__ == "__main__":

@@ -155,7 +155,6 @@
           >
             <div class="mb-2 flex items-center gap-2 text-xs text-accent-300">
               <span>AI 建议</span>
-              <span class="text-slate-500">· {{ analysis.llm.model }}</span>
             </div>
             <p class="text-sm leading-relaxed text-slate-200">
               {{ analysis.llm.suggestion }}

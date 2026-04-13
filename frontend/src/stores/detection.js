@@ -108,6 +108,15 @@ export const useDetectionStore = defineStore("detection", () => {
   const aiAnalysisLoading = ref(false);
   const aiRetrying = ref(false);
   const aiRetryCooldown = ref(false);
+  const aiAnalysisRequestId = ref(0);
+
+  const mergeLlmResult = (data) => {
+    if (!data?.llm) return;
+    aiAnalysisResult.value = {
+      spatial: aiAnalysisResult.value?.spatial ?? data.spatial ?? null,
+      llm: data.llm,
+    };
+  };
 
   const updateHistoryState = (userId, items, fetchedAt = Date.now()) => {
     detectionHistory.value = Array.isArray(items) ? items : [];
@@ -234,6 +243,8 @@ export const useDetectionStore = defineStore("detection", () => {
     try {
       isProcessing.value = true;
       requestError.value = "";
+      const requestId = ++aiAnalysisRequestId.value;
+      aiAnalysisLoading.value = false;
       detectionProgress.value = {
         percent: 0,
         message: "正在准备上传...",
@@ -404,7 +415,7 @@ export const useDetectionStore = defineStore("detection", () => {
       console.log("[DEBUG] 当前结果设置为:", currentResult.value);
 
       // 异步获取 LLM 分析（不阻塞检测流程）
-      _fetchLlmAnalysis(currentResult.value, authHeader);
+      _fetchLlmAnalysis(currentResult.value, authHeader, requestId);
 
       // 推送加载历史记录进度
       detectionProgress.value = {
@@ -550,8 +561,9 @@ export const useDetectionStore = defineStore("detection", () => {
   };
 
   // 异步获取 LLM 分析结果（检测完成后调用，不阻塞 UI）
-  const _fetchLlmAnalysis = async (result, authHeader) => {
-    if (!result?.detections) return;
+  const _fetchLlmAnalysis = async (result, authHeader, requestId) => {
+    if (!Array.isArray(result?.detections) || result.detections.length === 0) return;
+    if (requestId !== aiAnalysisRequestId.value) return;
     aiAnalysisLoading.value = true;
     try {
       const imgWidth = result.imgWidth || 1920;
@@ -570,25 +582,29 @@ export const useDetectionStore = defineStore("detection", () => {
       });
       if (!response.ok) return;
       const data = await response.json();
-      // 只更新 LLM 部分，保留已有的启发式结果
-      if (aiAnalysisResult.value && data.llm) {
-        aiAnalysisResult.value = {
-          ...aiAnalysisResult.value,
-          llm: data.llm,
-        };
-      }
+      if (requestId !== aiAnalysisRequestId.value) return;
+      mergeLlmResult(data);
     } catch (error) {
       console.warn("LLM 异步分析失败:", error);
     } finally {
-      aiAnalysisLoading.value = false;
+      if (requestId === aiAnalysisRequestId.value) {
+        aiAnalysisLoading.value = false;
+      }
     }
   };
 
   // AI 分析重试（带冷却防抖）
   const retryAiAnalysis = async () => {
-    if (!currentResult.value?.detections) return;
+    if (
+      !Array.isArray(currentResult.value?.detections) ||
+      currentResult.value.detections.length === 0
+    ) {
+      return;
+    }
     if (aiRetrying.value || aiRetryCooldown.value) return;
+    const requestId = ++aiAnalysisRequestId.value;
     aiRetrying.value = true;
+    aiAnalysisLoading.value = true;
     try {
       const authHeader = await getAuthHeader();
       const imgWidth = currentResult.value.imgWidth || 1920;
@@ -610,15 +626,14 @@ export const useDetectionStore = defineStore("detection", () => {
         throw new Error(err.detail || "AI 分析请求失败");
       }
       const data = await response.json();
-      if (aiAnalysisResult.value && data.llm) {
-        aiAnalysisResult.value = {
-          ...aiAnalysisResult.value,
-          llm: data.llm,
-        };
-      }
+      if (requestId !== aiAnalysisRequestId.value) return;
+      mergeLlmResult(data);
     } catch (error) {
       console.error("AI 分析重试失败:", error);
     } finally {
+      if (requestId === aiAnalysisRequestId.value) {
+        aiAnalysisLoading.value = false;
+      }
       aiRetrying.value = false;
       // 3s 冷却期
       aiRetryCooldown.value = true;
@@ -641,6 +656,7 @@ export const useDetectionStore = defineStore("detection", () => {
     aiAnalysisLoading.value = false;
     aiRetrying.value = false;
     aiRetryCooldown.value = false;
+    aiAnalysisRequestId.value = 0;
     // 重置参数到默认值
     detectionParams.value = { ...defaultDetectionParams };
     realtimePrefs.value = { ...defaultRealtimePrefs };

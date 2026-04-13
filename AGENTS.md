@@ -1,49 +1,48 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repo has a Vue frontend and a FastAPI backend.
-
-- `frontend/`: Vite + Vue 3 app. Main code is in `src/` (`views/`, `components/`, `layouts/`, `stores/`, `router/`, `utils/`).
-- `frontend/src/**/__tests__/`: frontend unit tests (`*.spec.js`) with Vitest.
-- `backend/`: FastAPI app, YOLOv8 inference, and API integration.
-- `backend/app/api/`: route modules (detection, history, settings, model weights, system).
-- `backend/app/services/`: business logic (detection, auth, storage, live stream).
-- `backend/app/core/`: shared config, logging, and runtime patches.
-- `backend/test_*.py`: main backend pytest files.
+- `backend/`: FastAPI service for detection, auth, settings, and history.
+- `backend/app/api/`: Route modules (e.g., `detection_routes.py`, `history_routes.py`).
+- `backend/app/services/`: Core business logic (detection pipeline, storage, auth helpers).
+- `frontend/`: Vue 3 + Vite client.
+- `frontend/src/views/`: Page-level views (`Realtime.vue`, `Settings.vue`, `History.vue`).
+- `frontend/src/components/`: Reusable UI components.
+- `frontend/src/stores/`: Pinia stores (`auth.js`, `detection.js`).
+- `logs/`, `runs/`, `backend/uploads/`, `backend/results/`: runtime artifacts; do not commit generated output unless required.
 
 ## Build, Test, and Development Commands
-- `cd frontend && pnpm install`: install frontend dependencies.
-- `cd frontend && pnpm dev`: run frontend dev server.
-- `cd frontend && pnpm build`: build production frontend assets.
-- `cd frontend && pnpm test`: run Vitest (`pnpm test:watch` for watch mode).
-- `cd backend && .\.venv\Scripts\python -m pip install -r requirements.txt`: install backend dependencies.
-- `cd backend && .\.venv\Scripts\python -m uvicorn main:app --reload --port 8000`: run backend locally.
-- `cd backend && .\.venv\Scripts\python -m pytest test_*.py -v`: run backend tests.
-- Windows shortcut: use the repository root batch launcher to start frontend and backend together.
+- One-click local start (Windows): `运行项目.bat` (starts backend on `8000` and frontend on `5173`).
+- Frontend:
+  - `cd frontend && pnpm dev` — start Vite dev server.
+  - `cd frontend && pnpm build` — production build.
+  - `cd frontend && pnpm test` — run Vitest once.
+- Backend (run from `backend/` to keep relative paths valid):
+  - `.\.venv\Scripts\python -m uvicorn main:app --reload --port 8000` — start API.
+  - `.\.venv\Scripts\python -m pytest test_*.py -v --timeout=60` — run backend tests.
 
 ## Coding Style & Naming Conventions
-Use `.editorconfig`: 2 spaces for JS/Vue/JSON/YAML, 4 spaces for Python, UTF-8, LF line endings.
-
-- Vue components and views use `PascalCase` file names (for example, `ModelWeights.vue`).
-- Store and utility modules use concise lowercase names (for example, `auth.js`, `protected-url.js`).
+- Follow `.editorconfig`: UTF-8, LF, trim trailing whitespace, final newline.
+- Indentation: 2 spaces for `js/vue/json/yml`, 4 spaces for Python.
+- Vue components use `PascalCase` filenames; stores/utilities use lowercase names.
 - Python modules/functions use `snake_case`; classes use `PascalCase`.
-- Keep API and service functions small and composable.
+- Keep functions focused; place shared logic in `backend/app/services/` or `frontend/src/components/`.
 
 ## Testing Guidelines
-- Frontend stack: Vitest + `@vue/test-utils` + `jsdom`.
-- Backend stack: Pytest.
-- Naming: frontend `*.spec.js`, backend `test_*.py`.
-- Update tests for behavior changes; add regression tests for bug fixes.
+- Frontend: Vitest + `@vue/test-utils`; place tests in `__tests__/` with `*.spec.js`.
+- Backend: pytest with `test_*.py` naming in `backend/`.
+- For backend test runs, always set max timeout to 60s to avoid hangs.
+- Add/update tests with every behavior change, especially for APIs and state stores.
 
 ## Commit & Pull Request Guidelines
-Recent history uses Conventional Commits (`feat:`, `fix:`, `chore:`, and scopes like `feat(realtime):`).
-
-- Keep commits atomic.
-- PRs should include purpose, touched modules, and test evidence (`pnpm test`, `pytest`).
-- For UI changes, include screenshots or short GIFs.
-- Link related issues/tasks and call out `.env` or config changes.
+- Use Conventional Commits seen in history: `feat:`, `fix:`, `perf:`, `chore:`; optional scope like `feat(realtime): ...`.
+- Keep commits small and logically grouped.
+- PRs should include:
+  - What changed and why.
+  - Linked issue/task (if any).
+  - Test evidence (`pnpm test`, `pytest ...` output summary).
+  - UI screenshots/GIFs for frontend behavior changes.
 
 ## Security & Configuration Tips
-- Keep secrets in `.env` only; never commit real credentials.
-- Frontend reads env from repository root via Vite `envDir`.
-- Treat model weights and runtime outputs as environment artifacts unless versioning is intentional.
+- Copy from `.env.example`; never commit real secrets from `.env`.
+- Treat model weights and runtime outputs as environment-specific assets.
+- Validate Supabase and auth-related env vars before deploying.

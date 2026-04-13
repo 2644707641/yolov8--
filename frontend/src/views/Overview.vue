@@ -78,37 +78,38 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { supabase } from '../config/supabase'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const stats = ref([
   {
     label: '今日识别次数',
-    value: '128',
-    delta: '+12%',
+    value: '0',
+    delta: '0',
     deltaType: 'up',
-    hint: '较昨日任务量提升'
+    hint: '今日累计检测任务'
   },
   {
     label: '平均推理耗时',
-    value: '0.42s',
-    delta: '-6%',
-    deltaType: 'down',
-    hint: '模型响应更快'
+    value: '0.00s',
+    delta: '实时',
+    deltaType: 'up',
+    hint: '基于成功检测任务实时统计'
   },
   {
     label: '活跃模型',
-    value: '3',
-    delta: '+1',
+    value: '0',
+    delta: '实时',
     deltaType: 'up',
-    hint: '已激活的权重数量'
+    hint: '当前已激活模型数量'
   },
   {
     label: '实时在线流',
-    value: '4',
-    delta: '+2',
+    value: '0',
+    delta: '实时',
     deltaType: 'up',
-    hint: '正在运行的摄像头'
+    hint: '当前实时检测在线流数量'
   }
 ])
 
@@ -142,8 +143,7 @@ const activity = ref([
 const healthItems = ref([
   { label: 'GPU 利用率', value: '0%', percent: '0%', color: 'bg-primary-500' },
   { label: '内存占用', value: '0GB', percent: '0%', color: 'bg-emerald-500' },
-  { label: '队列积压', value: '0', percent: '0%', color: 'bg-amber-500' },
-  { label: '错误率', value: '0%', percent: '0%', color: 'bg-rose-500' }
+  { label: '成功率', value: '100%', percent: '100%', color: 'bg-cyan-500' }
 ])
 
 async function fetchSystemStatus() {
@@ -155,8 +155,7 @@ async function fetchSystemStatus() {
       healthItems.value = [
         { label: 'GPU 利用率', value: `${d.gpu_utilization}%`, percent: `${d.gpu_utilization}%`, color: 'bg-primary-500' },
         { label: '内存占用', value: `${d.memory_used}GB`, percent: `${d.memory_percent}%`, color: 'bg-emerald-500' },
-        { label: '队列积压', value: `${d.queue_backlog}`, percent: `${Math.min(d.queue_backlog * 10, 100)}%`, color: 'bg-amber-500' },
-        { label: '错误率', value: `${d.error_rate}%`, percent: `${Math.min(d.error_rate * 10, 100)}%`, color: 'bg-rose-500' }
+        { label: '成功率', value: `${d.success_rate}%`, percent: `${d.success_rate}%`, color: 'bg-cyan-500' }
       ]
     }
   } catch (error) {
@@ -164,11 +163,77 @@ async function fetchSystemStatus() {
   }
 }
 
+function buildTodayDelta(todayCount, yesterdayCount) {
+  const today = Number(todayCount) || 0
+  const yesterday = Number(yesterdayCount) || 0
+  const diff = today - yesterday
+  const sign = diff >= 0 ? '+' : ''
+  return {
+    text: `${sign}${diff}`,
+    type: diff >= 0 ? 'up' : 'down'
+  }
+}
+
+async function fetchOverviewStats() {
+  try {
+    const { data } = await supabase.auth.getSession()
+    const token = data?.session?.access_token
+    if (!token) return
+
+    const response = await fetch(`${API_URL}/api/system/overview`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    const body = await response.json()
+    if (!body.success || !body.data) return
+
+    const d = body.data
+    const todayDelta = buildTodayDelta(d.today_detection_count, d.yesterday_detection_count)
+    stats.value = [
+      {
+        label: '今日识别次数',
+        value: `${d.today_detection_count}`,
+        delta: todayDelta.text,
+        deltaType: todayDelta.type,
+        hint: '今日累计检测任务'
+      },
+      {
+        label: '平均推理耗时',
+        value: `${Number(d.avg_inference_time || 0).toFixed(2)}s`,
+        delta: '实时',
+        deltaType: 'up',
+        hint: '基于成功检测任务实时统计'
+      },
+      {
+        label: '活跃模型',
+        value: `${d.active_model_count}`,
+        delta: '实时',
+        deltaType: 'up',
+        hint: '当前已激活模型数量'
+      },
+      {
+        label: '实时在线流',
+        value: `${d.online_stream_count}`,
+        delta: '实时',
+        deltaType: 'up',
+        hint: '当前实时检测在线流数量'
+      }
+    ]
+  } catch (error) {
+    console.error('获取概览统计失败:', error)
+  }
+}
+
+async function refreshOverviewData() {
+  await Promise.all([fetchSystemStatus(), fetchOverviewStats()])
+}
+
 let statusTimer = null
 
 onMounted(() => {
-  fetchSystemStatus()
-  statusTimer = setInterval(fetchSystemStatus, 5000)
+  refreshOverviewData()
+  statusTimer = setInterval(refreshOverviewData, 5000)
 })
 
 onBeforeUnmount(() => {

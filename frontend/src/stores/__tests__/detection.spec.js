@@ -9,6 +9,16 @@ const fetchMock = vi.fn()
 
 global.fetch = fetchMock
 
+const createDeferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 vi.mock('../../config/supabase', () => ({
   supabase: {
     auth: {
@@ -196,5 +206,151 @@ describe('detection store history cache', () => {
     expect(store.currentResult?.description).toBe('json payload')
     expect(store.currentResult?.resultUrl).toContain('/api/results/json-result.jpg')
     expect(store.requestError).toBe('')
+  })
+
+  it('当启发式结果为空时也应接收并展示异步 LLM 结果', async () => {
+    vi.useRealTimers()
+    const { useDetectionStore } = await import('../detection')
+    const store = useDetectionStore()
+
+    fetchMock.mockImplementation(async (url) => {
+      if (String(url).includes('/api/detect')) {
+        return {
+          ok: true,
+          headers: { get: () => 'application/json; charset=utf-8' },
+          async json() {
+            return {
+              success: true,
+              resultUrl: '/api/results/no-spatial.jpg',
+              originalUrlSupabase: 'https://storage.example.com/original.jpg',
+              resultUrlSupabase: null,
+              detections: [{ class: 'demo-none-spatial', bbox: [0, 0, 10, 10], confidence: 0.9 }],
+              aiAnalysis: null
+            }
+          }
+        }
+      }
+      if (String(url).includes('/api/ai/analyze-llm')) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              success: true,
+              spatial: null,
+              llm: {
+                success: true,
+                suggestion: '建议前往左侧',
+                model: 'demo-model'
+              }
+            }
+          }
+        }
+      }
+      throw new Error(`unexpected fetch url: ${url}`)
+    })
+
+    const result = await store.runDetection(
+      new File(['demo'], 'demo.jpg', { type: 'image/jpeg' }),
+      'image'
+    )
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(result.success).toBe(true)
+    expect(store.aiAnalysisResult).not.toBeNull()
+    expect(store.aiAnalysisResult?.llm?.success).toBe(true)
+    expect(store.aiAnalysisResult?.llm?.suggestion).toContain('左侧')
+  })
+
+  it('连续两次检测时旧的异步 LLM 回包不应覆盖最新结果', async () => {
+    vi.useRealTimers()
+    const { useDetectionStore } = await import('../detection')
+    const store = useDetectionStore()
+
+    const firstLlmDeferred = createDeferred()
+    let detectIndex = 0
+
+    fetchMock.mockImplementation(async (url, options = {}) => {
+      const target = String(url)
+      if (target.includes('/api/detect')) {
+        detectIndex += 1
+        const marker = detectIndex === 1 ? 'first-marker' : 'second-marker'
+        const summary = detectIndex === 1 ? 'first spatial' : 'second spatial'
+        return {
+          ok: true,
+          headers: { get: () => 'application/json; charset=utf-8' },
+          async json() {
+            return {
+              success: true,
+              resultUrl: `/api/results/${marker}.jpg`,
+              originalUrlSupabase: 'https://storage.example.com/original.jpg',
+              resultUrlSupabase: null,
+              detections: [{ class: marker, bbox: [0, 0, 10, 10], confidence: 0.9 }],
+              aiAnalysis: {
+                spatial: {
+                  summary,
+                  zones: [],
+                  totalEmpty: 1,
+                  totalOccupied: 0
+                },
+                llm: null
+              }
+            }
+          }
+        }
+      }
+
+      if (target.includes('/api/ai/analyze-llm')) {
+        const body = JSON.parse(options.body || '{}')
+        const marker = body?.detections?.[0]?.class
+        if (marker === 'first-marker') {
+          return firstLlmDeferred.promise
+        }
+        if (marker === 'second-marker') {
+          return {
+            ok: true,
+            async json() {
+              return {
+                success: true,
+                llm: {
+                  success: true,
+                  suggestion: 'second suggestion',
+                  model: 'demo-model'
+                }
+              }
+            }
+          }
+        }
+      }
+      throw new Error(`unexpected fetch url: ${url}`)
+    })
+
+    await store.runDetection(new File(['one'], 'one.jpg', { type: 'image/jpeg' }), 'image')
+    await store.runDetection(new File(['two'], 'two.jpg', { type: 'image/jpeg' }), 'image')
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(store.aiAnalysisResult?.llm?.suggestion).toBe('second suggestion')
+
+    firstLlmDeferred.resolve({
+      ok: true,
+      async json() {
+        return {
+          success: true,
+          llm: {
+            success: true,
+            suggestion: 'first late suggestion',
+            model: 'demo-model'
+          }
+        }
+      }
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(store.aiAnalysisResult?.llm?.suggestion).toBe('second suggestion')
+    expect(store.aiAnalysisResult?.spatial?.summary).toBe('second spatial')
   })
 })
