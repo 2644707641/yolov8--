@@ -100,7 +100,7 @@
             >
               <router-link
                 v-if="isInternalLink(item.link)"
-                class="inline-block relative pr-[1.4em] font-semibold text-[4rem] text-black no-underline uppercase leading-none tracking-[-2px] transition-[background,color] duration-150 ease-linear cursor-pointer sm-panel-item"
+                class="inline-block relative pr-[1.4em] font-semibold text-[clamp(2.25rem,5vw,4rem)] text-black no-underline uppercase leading-none tracking-[-2px] transition-[background,color] duration-150 ease-linear cursor-pointer whitespace-nowrap sm-panel-item"
                 :to="item.link"
                 :aria-label="item.ariaLabel"
                 :data-index="idx + 1"
@@ -113,7 +113,7 @@
               </router-link>
               <a
                 v-else
-                class="inline-block relative pr-[1.4em] font-semibold text-[4rem] text-black no-underline uppercase leading-none tracking-[-2px] transition-[background,color] duration-150 ease-linear cursor-pointer sm-panel-item"
+                class="inline-block relative pr-[1.4em] font-semibold text-[clamp(2.25rem,5vw,4rem)] text-black no-underline uppercase leading-none tracking-[-2px] transition-[background,color] duration-150 ease-linear cursor-pointer whitespace-nowrap sm-panel-item"
                 :href="item.link"
                 :aria-label="item.ariaLabel"
                 :data-index="idx + 1"
@@ -127,7 +127,7 @@
             </li>
             <li v-else class="relative overflow-hidden leading-none sm-panel-itemWrap" aria-hidden="true">
               <span
-                class="inline-block relative pr-[1.4em] font-semibold text-[4rem] text-black no-underline uppercase leading-none tracking-[-2px] transition-[background,color] duration-150 ease-linear cursor-pointer sm-panel-item"
+                class="inline-block relative pr-[1.4em] font-semibold text-[clamp(2.25rem,5vw,4rem)] text-black no-underline uppercase leading-none tracking-[-2px] transition-[background,color] duration-150 ease-linear cursor-pointer whitespace-nowrap sm-panel-item"
               >
                 <span class="inline-block will-change-transform sm-panel-itemLabel [transform-origin:50%_100%]">
                   No items
@@ -852,11 +852,12 @@ onBeforeUnmount(() => {
   position: relative;
   color: #000;
   font-weight: 600;
-  font-size: 4rem;
+  font-size: clamp(2.25rem, 5vw, 4rem);
   cursor: pointer;
   line-height: 1;
   letter-spacing: -2px;
   text-transform: uppercase;
+  white-space: nowrap;
   transition:
     background 0.25s,
     color 0.25s;

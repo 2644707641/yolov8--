@@ -168,7 +168,7 @@
                 <video
                   v-if="isCameraSource"
                   ref="videoRef"
-                  class="h-full w-full object-cover"
+                  class="h-full w-full object-cover -scale-x-100"
                   autoplay
                   muted
                   playsinline
@@ -339,7 +339,7 @@
                     <video
                       v-if="isCameraSource"
                       ref="modalVideoRef"
-                      class="h-full w-full object-cover"
+                      class="h-full w-full object-cover -scale-x-100"
                       autoplay
                       muted
                       playsinline
@@ -681,13 +681,18 @@ import {
 } from "vue";
 import { supabase } from "../config/supabase";
 import { useDetectionStore } from "../stores/detection";
+import {
+  createLatestFrameScheduler,
+  getRealtimeCaptureSize,
+} from "../utils/realtime-frame";
 import { buildProtectedApiUrl } from "../utils/protected-url";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const detectionStore = useDetectionStore();
+const LIVE_PREVIEW_RENDER_INTERVAL_MS = 100;
 
 // ── usePanZoom：鼠标滚轮缩放 + 拖拽平移 ──────────────────────────────
-function usePanZoom() {
+function usePanZoom(options = {}) {
   const containerRef = ref(null);
   const zoom = ref(1);
   const tx = ref(0);
@@ -711,20 +716,76 @@ function usePanZoom() {
     ty.value = Math.max(H * (1 - zoom.value), Math.min(0, ty.value));
   };
 
+  const getPanRatio = () => {
+    if (!containerRef.value || zoom.value <= 1) {
+      return { x: 0, y: 0 };
+    }
+    const W = containerRef.value.clientWidth;
+    const H = containerRef.value.clientHeight;
+    const maxOffsetX = Math.max(0, W * (zoom.value - 1));
+    const maxOffsetY = Math.max(0, H * (zoom.value - 1));
+    return {
+      x: maxOffsetX > 0 ? Math.max(0, Math.min(1, -tx.value / maxOffsetX)) : 0,
+      y: maxOffsetY > 0 ? Math.max(0, Math.min(1, -ty.value / maxOffsetY)) : 0,
+    };
+  };
+
+  const applyPanRatio = (ratio = null, { sync = true } = {}) => {
+    if (!containerRef.value || zoom.value <= 1) {
+      tx.value = 0;
+      ty.value = 0;
+      if (sync) {
+        options.onPanChange?.({ ratio: { x: 0, y: 0 } });
+      }
+      return;
+    }
+
+    const nextRatioX = Math.max(0, Math.min(1, Number(ratio?.x) || 0));
+    const nextRatioY = Math.max(0, Math.min(1, Number(ratio?.y) || 0));
+    const W = containerRef.value.clientWidth;
+    const H = containerRef.value.clientHeight;
+    const maxOffsetX = Math.max(0, W * (zoom.value - 1));
+    const maxOffsetY = Math.max(0, H * (zoom.value - 1));
+
+    tx.value = -maxOffsetX * nextRatioX;
+    ty.value = -maxOffsetY * nextRatioY;
+    clamp();
+
+    if (sync) {
+      options.onPanChange?.({ ratio: getPanRatio() });
+    }
+  };
+
+  const applyZoom = (nextZoom, anchor = null, { sync = true } = {}) => {
+    const boundedZoom = Math.max(1, Math.min(8, nextZoom));
+    if (boundedZoom === zoom.value) return;
+
+    if (containerRef.value) {
+      const rect = containerRef.value.getBoundingClientRect();
+      const cx = rect.width * (anchor?.x ?? 0.5);
+      const cy = rect.height * (anchor?.y ?? 0.5);
+      const ratio = boundedZoom / zoom.value;
+      tx.value = cx * (1 - ratio) + tx.value * ratio;
+      ty.value = cy * (1 - ratio) + ty.value * ratio;
+    }
+
+    zoom.value = boundedZoom;
+    clamp();
+
+    if (sync) {
+      options.onZoomChange?.({ zoom: boundedZoom, anchor });
+    }
+  };
+
   const _onWheel = (e) => {
     e.preventDefault();
     if (!containerRef.value) return;
     const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    const newZoom = Math.max(1, Math.min(8, zoom.value * factor));
-    if (newZoom === zoom.value) return;
     const rect = containerRef.value.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    const ratio = newZoom / zoom.value;
-    tx.value = cx * (1 - ratio) + tx.value * ratio;
-    ty.value = cy * (1 - ratio) + ty.value * ratio;
-    zoom.value = newZoom;
-    clamp();
+    applyZoom(zoom.value * factor, {
+      x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
+      y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)),
+    });
   };
 
   // containerRef 变化时自动注册/注销 wheel 监听（passive:false 才能 preventDefault）
@@ -752,6 +813,7 @@ function usePanZoom() {
     tx.value = _stx + (e.clientX - _sx);
     ty.value = _sty + (e.clientY - _sy);
     clamp();
+    options.onPanChange?.({ ratio: getPanRatio() });
   };
 
   const stopDrag = () => {
@@ -784,6 +846,8 @@ function usePanZoom() {
 
   return {
     containerRef,
+    applyPanRatio,
+    applyZoom,
     zoom,
     transformStyle,
     cursorClass,
@@ -798,8 +862,22 @@ function usePanZoom() {
 
 const leftPZ = usePanZoom();
 const rightPZ = usePanZoom();
-const modalLeftPZ = usePanZoom();
-const modalRightPZ = usePanZoom();
+const modalLeftPZ = usePanZoom({
+  onZoomChange: ({ zoom, anchor }) => {
+    modalRightPZ.applyZoom(zoom, anchor, { sync: false });
+  },
+  onPanChange: ({ ratio }) => {
+    modalRightPZ.applyPanRatio(ratio, { sync: false });
+  },
+});
+const modalRightPZ = usePanZoom({
+  onZoomChange: ({ zoom, anchor }) => {
+    modalLeftPZ.applyZoom(zoom, anchor, { sync: false });
+  },
+  onPanChange: ({ ratio }) => {
+    modalLeftPZ.applyPanRatio(ratio, { sync: false });
+  },
+});
 // ─────────────────────────────────────────────────────────────────────
 
 const videoRef = ref(null);
@@ -856,7 +934,7 @@ const displayConfidence = computed({
 const downloadUrl = ref("");
 const pendingStart = ref(false);
 
-const metrics = ref({
+const createEmptyMetrics = () => ({
   processedFrames: 0,
   detectionCount: 0,
   inferTime: 0,
@@ -865,6 +943,7 @@ const metrics = ref({
   avgConfidence: 0,
   frameErrors: 0,
 });
+const metrics = ref(createEmptyMetrics());
 
 const dropRate = computed(() => {
   const total = metrics.value.processedFrames + metrics.value.frameErrors;
@@ -913,6 +992,10 @@ let captureCanvas = null;
 let lastPreviewUrl = "";
 let recordTimer = null;
 let isDisposed = false;
+let sendingFrame = false;
+let awaitingFrameResult = false;
+let pendingFrameRequest = false;
+let frameRenderScheduler = null;
 const socketHandlers = {
   open: null,
   message: null,
@@ -985,20 +1068,14 @@ const resetRealtimeView = () => {
   stopCapture();
   clearRecordTimer();
   stopCamera();
+  frameRenderScheduler?.dispose();
+  frameRenderScheduler = null;
   if (lastPreviewUrl) {
     URL.revokeObjectURL(lastPreviewUrl);
     lastPreviewUrl = "";
   }
   previewUrl.value = "";
-  metrics.value = {
-    processedFrames: 0,
-    detectionCount: 0,
-    inferTime: 0,
-    totalDetections: 0,
-    uniqueTargetCount: 0,
-    avgConfidence: 0,
-    frameErrors: 0,
-  };
+  Object.assign(metrics.value, createEmptyMetrics());
   connectionState.value = "idle";
 };
 
@@ -1094,15 +1171,29 @@ const startDetection = async () => {
   }
 
   connectionState.value = "running";
-  metrics.value = {
-    processedFrames: 0,
-    detectionCount: 0,
-    inferTime: 0,
-    totalDetections: 0,
-    uniqueTargetCount: 0,
-    avgConfidence: 0,
-    frameErrors: 0,
-  };
+  Object.assign(metrics.value, createEmptyMetrics());
+  frameRenderScheduler?.dispose();
+  frameRenderScheduler = createLatestFrameScheduler({
+    commit: ({ blob, meta }) => {
+      const nextPreviewUrl = URL.createObjectURL(blob);
+      if (lastPreviewUrl) {
+        URL.revokeObjectURL(lastPreviewUrl);
+      }
+      lastPreviewUrl = nextPreviewUrl;
+      previewUrl.value = nextPreviewUrl;
+      Object.assign(metrics.value, {
+        processedFrames: meta.processedFrames || 0,
+        detectionCount: meta.detectionCount || 0,
+        inferTime: meta.inferTime || 0,
+        totalDetections: meta.totalDetections || 0,
+        uniqueTargetCount: meta.uniqueTargetCount || 0,
+        avgConfidence: meta.avgConfidence || 0,
+        frameErrors: meta.frameErrors || 0,
+      });
+      connectionState.value = "running";
+    },
+    minIntervalMs: LIVE_PREVIEW_RENDER_INTERVAL_MS,
+  });
 
   socket.send(
     JSON.stringify({
@@ -1146,10 +1237,27 @@ watch(displayConfidence, (value) => {
   sendConfidenceUpdate(value);
 });
 
+const flushPendingFrame = () => {
+  if (!pendingFrameRequest) return;
+  if (sendingFrame || awaitingFrameResult) return;
+  pendingFrameRequest = false;
+  void sendFrame();
+};
+
+const requestFrameCapture = () => {
+  if (isDisposed || !isCameraSource.value || !isRunning.value) return;
+  pendingFrameRequest = true;
+  flushPendingFrame();
+};
+
 const startCapture = () => {
   if (captureTimer) return;
+  sendingFrame = false;
+  awaitingFrameResult = false;
+  pendingFrameRequest = false;
   captureCanvas = captureCanvas || document.createElement("canvas");
-  captureTimer = window.setInterval(sendFrame, getCaptureInterval());
+  captureTimer = window.setInterval(requestFrameCapture, getCaptureInterval());
+  requestFrameCapture();
 };
 
 const stopCapture = () => {
@@ -1157,6 +1265,9 @@ const stopCapture = () => {
     window.clearInterval(captureTimer);
     captureTimer = null;
   }
+  pendingFrameRequest = false;
+  sendingFrame = false;
+  awaitingFrameResult = false;
 };
 
 const scheduleRecordStop = () => {
@@ -1187,18 +1298,32 @@ const getCaptureInterval = () => {
 const sendFrame = async () => {
   if (isDisposed) return;
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  if (!isRunning.value || !isCameraSource.value) return;
+  if (sendingFrame || awaitingFrameResult) return;
   const videoEl = videoRef.value;
   if (!videoEl || videoEl.readyState < 2) return;
 
+  sendingFrame = true;
   try {
-    const width = videoEl.videoWidth || 640;
-    const height = videoEl.videoHeight || 360;
+    const { width, height } = getRealtimeCaptureSize({
+      width: videoEl.videoWidth || 640,
+      height: videoEl.videoHeight || 360,
+      targetLongEdge: detectionStore.detectionParams.imgSize,
+    });
     captureCanvas.width = width;
     captureCanvas.height = height;
 
     const context = captureCanvas.getContext("2d");
     if (!context) return;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    // flip camera frame horizontally before upload
+    context.save();
+    context.clearRect(0, 0, width, height);
+    context.translate(width, 0);
+    context.scale(-1, 1);
     context.drawImage(videoEl, 0, 0, width, height);
+    context.restore();
 
     const blob = await new Promise((resolve) =>
       captureCanvas.toBlob(resolve, "image/jpeg", 0.8),
@@ -1208,10 +1333,14 @@ const sendFrame = async () => {
     const buffer = await blob.arrayBuffer();
     if (isDisposed || !socket || socket.readyState !== WebSocket.OPEN) return;
     socket.send(buffer);
+    sendingFrame = false;
+    awaitingFrameResult = true;
   } catch (error) {
     if (!isDisposed) {
       console.warn("发送实时帧失败:", error);
     }
+    sendingFrame = false;
+    awaitingFrameResult = false;
   }
 };
 
@@ -1227,11 +1356,13 @@ const handleSocketMessage = async (event) => {
         return;
       }
       if (payload.type === "error") {
+        awaitingFrameResult = false;
         errorMessage.value = payload.detail || "实时识别出错";
         connectionState.value = "error";
         return;
       }
       if (payload.type === "done") {
+        frameRenderScheduler?.flush();
         connectionState.value = "ready";
         if (payload.downloadUrl) {
           downloadUrl.value = await buildProtectedApiUrl(payload.downloadUrl);
@@ -1243,6 +1374,7 @@ const handleSocketMessage = async (event) => {
     const buffer =
       event.data instanceof Blob ? await event.data.arrayBuffer() : event.data;
     if (!(buffer instanceof ArrayBuffer)) return;
+    awaitingFrameResult = false;
     if (buffer.byteLength < 4) return;
 
     const view = new DataView(buffer);
@@ -1254,23 +1386,10 @@ const handleSocketMessage = async (event) => {
     const meta = JSON.parse(metaText);
     const imageBytes = new Uint8Array(buffer, 4 + metaLength);
 
-    const blob = new Blob([imageBytes], { type: "image/jpeg" });
-    if (lastPreviewUrl) {
-      URL.revokeObjectURL(lastPreviewUrl);
-    }
-    lastPreviewUrl = URL.createObjectURL(blob);
-    previewUrl.value = lastPreviewUrl;
-
-    metrics.value = {
-      processedFrames: meta.processedFrames || 0,
-      detectionCount: meta.detectionCount || 0,
-      inferTime: meta.inferTime || 0,
-      totalDetections: meta.totalDetections || 0,
-      uniqueTargetCount: meta.uniqueTargetCount || 0,
-      avgConfidence: meta.avgConfidence || 0,
-      frameErrors: meta.frameErrors || 0,
-    };
-    connectionState.value = "running";
+    frameRenderScheduler?.enqueue({
+      blob: new Blob([imageBytes], { type: "image/jpeg" }),
+      meta,
+    });
   } catch (error) {
     console.warn("实时消息解析失败:", error);
   }
