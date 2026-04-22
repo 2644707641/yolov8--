@@ -1439,7 +1439,7 @@
 
                   <!-- AI 智能分析 -->
                   <AiAnalysisPanel
-                    v-if="detectionStore.aiAnalysisResult"
+                    v-if="shouldShowAiAnalysis"
                     :analysis="detectionStore.aiAnalysisResult"
                     :loading="detectionStore.aiAnalysisLoading"
                     :retrying="detectionStore.aiRetrying"
@@ -2043,6 +2043,11 @@ const showRealtimeSnapshot = computed(
   () => isRealtimeResult.value && !hasRealtimeResultVideo.value,
 );
 const isVideoResult = computed(() => fileType.value === "video");
+const shouldShowAiAnalysis = computed(() => {
+  if (!detectionStore.aiAnalysisResult) return false;
+  const resultType = detectionStore.currentResult?.type || fileType.value;
+  return resultType !== "video";
+});
 const isStep3Completed = computed(
   () => detectionStore.isProcessing || !!detectionStore.currentResult,
 );

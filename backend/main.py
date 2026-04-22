@@ -31,7 +31,11 @@ except Exception as exc:
 @asynccontextmanager
 async def lifespan(app):
     # 启动：创建共享 httpx 客户端
-    app.state.http_client = httpx.AsyncClient(timeout=60.0)
+    app.state.http_client = httpx.AsyncClient(
+        timeout=60.0,
+        follow_redirects=True,
+        http2=True,
+    )
     logger.info("共享 HTTP 客户端初始化完成")
 
     # 启动时执行本地清理

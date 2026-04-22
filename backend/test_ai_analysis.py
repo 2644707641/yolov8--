@@ -1,8 +1,11 @@
 """测试 ai_analysis 推荐逻辑优化后的行为。"""
+import asyncio
 import sys, os
+
+import httpx
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
-from app.services.ai_analysis import analyze_spatial_distribution
+from app.services.ai_analysis import analyze_spatial_distribution, call_llm_analysis
 from app.api.analysis_routes import AnalysisRequest
 from pydantic import ValidationError
 
@@ -146,6 +149,174 @@ def test_analysis_request_should_validate_dimensions_and_detection_count():
     print("✅ 分析请求体参数校验生效")
 
 
+def test_call_llm_analysis_should_use_v1_chat_completions_for_root_url():
+    """根地址应自动补全到 /v1/chat/completions。"""
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": "建议优先前往左侧停车"}}
+                ],
+                "model": "demo-model",
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        result = asyncio.run(
+            call_llm_analysis(
+                spatial_result={
+                    "zones": [{"label": "左侧", "empty": 3, "occupied": 1}],
+                    "totalEmpty": 3,
+                    "totalOccupied": 1,
+                    "bestZone": "左侧",
+                    "bestZoneEmptyCount": 3,
+                },
+                api_url="https://example.com",
+                api_key="test-key",
+                model="demo-model",
+                client=client,
+            )
+        )
+    finally:
+        asyncio.run(client.aclose())
+
+    assert result["success"] is True
+    assert captured["url"] == "https://example.com/v1/chat/completions"
+
+
+def test_call_llm_analysis_should_parse_content_part_arrays():
+    """兼容 content 为数组分段的返回格式。"""
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": [
+                                {"type": "text", "text": "建议优先前往中部，其次右侧"},
+                            ]
+                        }
+                    }
+                ],
+                "model": "demo-model",
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        result = asyncio.run(
+            call_llm_analysis(
+                spatial_result={
+                    "zones": [{"label": "中部", "empty": 4, "occupied": 1}],
+                    "totalEmpty": 4,
+                    "totalOccupied": 1,
+                    "bestZone": "中部",
+                    "bestZoneEmptyCount": 4,
+                },
+                api_url="https://example.com/v1",
+                api_key="test-key",
+                model="demo-model",
+                client=client,
+            )
+        )
+    finally:
+        asyncio.run(client.aclose())
+
+    assert result["success"] is True
+    assert "中部" in result["suggestion"]
+
+
+def test_call_llm_analysis_should_parse_sse_stream_bodies():
+    """兼容错误返回为 SSE 分片的网关。"""
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        body = (
+            'data: {"choices":[{"delta":{"role":"assistant","content":"建议"}}]}\n\n'
+            'data: {"choices":[{"delta":{"content":"优先前往左侧"}}]}\n\n'
+            'data: [DONE]\n\n'
+        )
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            text=body,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        result = asyncio.run(
+            call_llm_analysis(
+                spatial_result={
+                    "zones": [{"label": "左侧", "empty": 4, "occupied": 1}],
+                    "totalEmpty": 4,
+                    "totalOccupied": 1,
+                    "bestZone": "左侧",
+                    "bestZoneEmptyCount": 4,
+                },
+                api_url="https://example.com",
+                api_key="test-key",
+                model="demo-model",
+                client=client,
+            )
+        )
+    finally:
+        asyncio.run(client.aclose())
+
+    assert result["success"] is True
+    assert result["suggestion"] == "建议优先前往左侧"
+
+
+def test_call_llm_analysis_should_strip_markdown_tokens():
+    """LLM 返回 Markdown 时应清洗为纯文本。"""
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": "**停车建议：**\n- **优先推荐：** 左侧\n- `备注` [详情](https://example.com)"
+                        }
+                    }
+                ],
+                "model": "demo-model",
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        result = asyncio.run(
+            call_llm_analysis(
+                spatial_result={
+                    "zones": [{"label": "左侧", "empty": 4, "occupied": 1}],
+                    "totalEmpty": 4,
+                    "totalOccupied": 1,
+                    "bestZone": "左侧",
+                    "bestZoneEmptyCount": 4,
+                },
+                api_url="https://example.com/v1",
+                api_key="test-key",
+                model="demo-model",
+                client=client,
+            )
+        )
+    finally:
+        asyncio.run(client.aclose())
+
+    assert result["success"] is True
+    assert "**" not in result["suggestion"]
+    assert "`" not in result["suggestion"]
+    assert "[详情](" not in result["suggestion"]
+    assert "停车建议" in result["suggestion"]
+
+
 if __name__ == "__main__":
     test_central_area_recommended()
     test_single_empty_not_recommended()
@@ -153,4 +324,8 @@ if __name__ == "__main__":
     test_all_zones_only_one_empty()
     test_invalid_bbox_and_none_class_should_not_break_analysis()
     test_analysis_request_should_validate_dimensions_and_detection_count()
+    test_call_llm_analysis_should_use_v1_chat_completions_for_root_url()
+    test_call_llm_analysis_should_parse_content_part_arrays()
+    test_call_llm_analysis_should_parse_sse_stream_bodies()
+    test_call_llm_analysis_should_strip_markdown_tokens()
     print("\n🎉 全部测试通过")

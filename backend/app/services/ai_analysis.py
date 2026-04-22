@@ -1,37 +1,52 @@
 """
 AI 智能分析服务：启发式空间分区 + LLM 增强。
-
-每次检测完成后自动触发：
-1. 启发式分析（零成本毫秒级）始终执行，同步返回
-2. LLM 分析通过独立端点异步调用，不阻塞检测响应
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
 logger = logging.getLogger("yolov8.ai_analysis")
 
-# ── 空车位关键词（与 detection.py 保持一致）────────────────────────────────
-_EMPTY_KEYWORDS = {"empty", "空", "free", "available", "vacant", "spare"}
+_EMPTY_KEYWORDS = {"empty", "free", "available", "vacant", "spare", "空"}
 
-# 九宫格方位标签
 _ZONE_LABELS = {
-    (0, 0): "左上", (0, 1): "上方", (0, 2): "右上",
-    (1, 0): "左侧", (1, 1): "中央", (1, 2): "右侧",
-    (2, 0): "左下", (2, 1): "下方", (2, 2): "右下",
+    (0, 0): "左上",
+    (0, 1): "上方",
+    (0, 2): "右上",
+    (1, 0): "左侧",
+    (1, 1): "中央",
+    (1, 2): "右侧",
+    (2, 0): "左下",
+    (2, 1): "下方",
+    (2, 2): "右下",
 }
 
-# 九宫格有序排列（前端渲染用）
 _ZONE_ORDER = [
     (0, 0), (0, 1), (0, 2),
     (1, 0), (1, 1), (1, 2),
     (2, 0), (2, 1), (2, 2),
 ]
+
+_LLM_SYSTEM_PROMPT = (
+    "你是一个智能停车位分析助手。"
+    "根据各区域空车位和占用数量，给出简短、可执行的停车建议。"
+    "优先推荐空位多且空闲率高的区域。"
+)
+
+_LLM_USER_PROMPT_TEMPLATE = (
+    "各区域车位分布：\n{spatial_data}\n\n"
+    "总空车位：{total_empty}\n"
+    "总占用车位：{total_occupied}\n"
+    "最空闲区域：{best_zone}（{best_empty_count}个空位）\n\n"
+    "请给出简洁停车建议。"
+)
 
 
 def _is_empty_class(class_name: Any) -> bool:
@@ -41,7 +56,7 @@ def _is_empty_class(class_name: Any) -> bool:
     if not isinstance(class_name, str):
         class_name = str(class_name)
     name_lower = class_name.lower()
-    return any(kw in name_lower for kw in _EMPTY_KEYWORDS)
+    return any(keyword in name_lower for keyword in _EMPTY_KEYWORDS)
 
 
 def _assign_zone(
@@ -54,7 +69,7 @@ def _assign_zone(
     cy = (bbox[1] + bbox[3]) / 2
     col = min(2, max(0, int(cx / (img_width / 3)))) if img_width > 0 else 1
     row = min(2, max(0, int(cy / (img_height / 3)))) if img_height > 0 else 1
-    return (row, col)
+    return row, col
 
 
 def analyze_spatial_distribution(
@@ -62,36 +77,11 @@ def analyze_spatial_distribution(
     img_width: int = 1920,
     img_height: int = 1080,
 ) -> Optional[Dict[str, Any]]:
-    """
-    启发式空间分析：将检测框映射到九宫格区域，
-    统计每个区域的空车位/占用车位数量，按空闲程度推荐。
-
-    推荐逻辑：
-    - 空闲率 = 空车位 / 总车位（无车位时为 0）
-    - 优先推荐有空车位且空闲率高的区域
-    - 空车位多但拥挤（占用也多）的区域优先级低于空车位稍少但更空闲的区域
-
-    返回结构：
-    {
-        "zones": [
-            {"label": "左上", "empty": 5, "occupied": 1, "total": 6,
-             "vacancyRate": 0.83, "recommendation": "推荐", "isBest": true},
-            ...
-        ],
-        "recommendedZones": ["左侧", "右下"],
-        "bestZone": "左侧",
-        "bestZoneEmptyCount": 5,
-        "totalEmpty": 12,
-        "totalOccupied": 15,
-        "summary": "左侧最空闲（5空/1占），建议前往该区域停车",
-        "imgDimensions": {"width": 1920, "height": 1080}
-    }
-    """
+    """启发式空间分析，输出区域推荐。"""
     if not detections:
         return None
 
-    zone_stats: Dict[tuple, Dict[str, int]] = {}
-
+    zone_stats: Dict[tuple[int, int], Dict[str, int]] = {}
     for det in detections:
         bbox = det.get("bbox")
         if not bbox or len(bbox) < 4:
@@ -114,14 +104,12 @@ def analyze_spatial_distribution(
     if not zone_stats:
         return None
 
-    # 计算空闲率，确定推荐区域
     total_empty = 0
     total_occupied = 0
     scored_zones: List[Dict[str, Any]] = []
 
-    # 找出最大空车位数，用于归一化
     max_empty_count = 0
-    for zone_key, stats in zone_stats.items():
+    for stats in zone_stats.values():
         total_empty += stats["empty"]
         total_occupied += stats["occupied"]
         if stats["empty"] > max_empty_count:
@@ -129,8 +117,6 @@ def analyze_spatial_distribution(
 
     for zone_key, stats in zone_stats.items():
         vacancy_rate = stats["empty"] / stats["total"] if stats["total"] > 0 else 0.0
-        # 综合评分：空闲率权重 0.6 + 空车位绝对数量归一化权重 0.4
-        # 归一化避免除零，max 为 1 时直接用 1.0
         empty_norm = stats["empty"] / max_empty_count if max_empty_count > 0 else 0.0
         score = vacancy_rate * 0.6 + empty_norm * 0.4
         scored_zones.append({
@@ -142,7 +128,6 @@ def analyze_spatial_distribution(
             "score": score,
         })
 
-    # 排序：有空车位的区域按综合评分降序，评分相同按空车位数降序
     has_empty = [z for z in scored_zones if z["empty"] > 0]
     has_empty.sort(key=lambda z: (z["score"], z["empty"]), reverse=True)
 
@@ -150,16 +135,13 @@ def analyze_spatial_distribution(
     best_empty_count = has_empty[0]["empty"] if has_empty else 0
     best_occupied_count = has_empty[0]["occupied"] if has_empty else 0
 
-    # 推荐区域：综合评分 >= 0.4 且空车位 >= 2，或空车位最多的前 2 个区域
-    recommended_keys = []
+    recommended_keys: List[tuple[int, int]] = []
     for z in has_empty:
         if z["score"] >= 0.4 and z["empty"] >= 2:
             recommended_keys.append(z["key"])
         elif len(recommended_keys) < 2:
-            # 兜底：至少推荐空车位最多的前 2 个
             recommended_keys.append(z["key"])
 
-    # 构建有序 zones 列表
     zones_list = []
     best_label = None
     for zone_key in _ZONE_ORDER:
@@ -169,11 +151,8 @@ def analyze_spatial_distribution(
         is_recommended = zone_key in recommended_keys
         is_best = zone_key == best_zone_key and best_empty_count > 0
 
-        # 推荐等级（综合评分 + 绝对数量分档）
         if is_best:
             recommendation = "强烈推荐"
-        elif is_recommended and vacancy_rate >= 0.5 and stats["empty"] >= 2:
-            recommendation = "推荐"
         elif is_recommended and stats["empty"] >= 2:
             recommendation = "推荐"
         elif stats["empty"] > 0:
@@ -200,20 +179,12 @@ def analyze_spatial_distribution(
 
     recommended_labels = [_ZONE_LABELS[k] for k in recommended_keys]
 
-    summary = ""
     if best_label and best_empty_count > 0:
-        if len(recommended_labels) > 1:
-            others = "、".join(recommended_labels[1:])
-            summary = (
-                f"{best_label}最空闲（{best_empty_count}空/{best_occupied_count}占），"
-                f"建议优先前往；{others}也有空位可选"
-            )
-        else:
-            summary = f"{best_label}最空闲（{best_empty_count}空/{best_occupied_count}占），建议前往该区域停车"
+        summary = f"{best_label}最空闲（{best_empty_count}空{best_occupied_count}占），建议优先前往。"
     elif total_empty == 0 and total_occupied > 0:
-        summary = "当前画面中未发现空车位，所有车位均被占用"
+        summary = "当前画面未发现空车位。"
     else:
-        summary = "未检测到足够的车位信息，无法提供方位建议"
+        summary = "未检测到足够车位信息，无法提供方位建议。"
 
     return {
         "zones": zones_list,
@@ -227,27 +198,112 @@ def analyze_spatial_distribution(
     }
 
 
-# ── LLM 增强分析 ────────────────────────────────────────────────────────────
+def _build_chat_completions_url(api_url: str) -> str:
+    """兼容根地址、/v1 和完整 chat/completions 地址。"""
+    normalized = (api_url or "").strip().rstrip("/")
+    if not normalized:
+        return ""
+    if normalized.endswith("/chat/completions"):
+        return normalized
+    if normalized.endswith("/v1"):
+        return f"{normalized}/chat/completions"
 
-_LLM_SYSTEM_PROMPT = (
-    "你是一个智能停车位分析助手。根据以下各区域的车位占用数据，给出实用的停车推荐。\n"
-    "要求：\n"
-    "1. 综合考虑空闲率和空车位绝对数量：空闲率高且空车位多的区域最推荐；空闲率高但只有1个空位的区域优先级较低；空车位多但占用也多（拥挤）的区域优先级也较低\n"
-    "2. 只有1个空位的区域应标注为\"有空位但不作为首选\"，不宜推荐为优先\n"
-    "3. 如果多个区域都空闲，给出最优选择和备选区域\n"
-    "4. 给出明确的方位建议（如\"建议优先前往左侧，右下也可作为备选\"）\n"
-    "5. 回答不超过 200 字\n"
-    "6. 不要输出字数统计、字数标注（如\"128字\"）或任何关于回答长度的元信息\n"
-    "7. 不要使用 Markdown 格式（如 **加粗**），直接输出纯文本"
-)
+    parsed = urlsplit(normalized)
+    path = parsed.path.rstrip("/")
+    if not path:
+        path = "/v1/chat/completions"
+    else:
+        path = f"{path}/v1/chat/completions"
+    return urlunsplit((parsed.scheme, parsed.netloc, path, parsed.query, parsed.fragment))
 
-_LLM_USER_PROMPT_TEMPLATE = (
-    "各区域车位分布（空闲率=空车位/总车位）：\n{spatial_data}\n\n"
-    "总空车位：{total_empty}\n"
-    "总占用车位：{total_occupied}\n"
-    "最空闲区域：{best_zone}（{best_empty_count}个空车位）\n\n"
-    "请综合考虑空闲率和空车位绝对数量给出停车建议。只有1个空位的区域不应作为首选推荐："
-)
+
+def _extract_message_content(data: Dict[str, Any]) -> str:
+    """解析 OpenAI 兼容响应内容。"""
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return ""
+
+    first_choice = choices[0] or {}
+    message = first_choice.get("message") or {}
+    content = message.get("content")
+
+    if isinstance(content, str):
+        return content.strip()
+
+    if isinstance(content, list):
+        text_parts: List[str] = []
+        for item in content:
+            if isinstance(item, str) and item.strip():
+                text_parts.append(item.strip())
+                continue
+            if not isinstance(item, dict):
+                continue
+            text_value = item.get("text")
+            if isinstance(text_value, str) and text_value.strip():
+                text_parts.append(text_value.strip())
+        return "\n".join(text_parts).strip()
+
+    text = first_choice.get("text")
+    if isinstance(text, str):
+        return text.strip()
+
+    return ""
+
+
+def _extract_sse_message_content(raw_text: str) -> str:
+    """解析被网关包装成 SSE 的 chat completion 响应。"""
+    text_parts: List[str] = []
+    for line in raw_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("data:"):
+            continue
+        payload = stripped[5:].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            chunk = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+
+        for choice in chunk.get("choices", []) or []:
+            delta = choice.get("delta") or {}
+            delta_content = delta.get("content")
+            if isinstance(delta_content, str) and delta_content:
+                text_parts.append(delta_content)
+
+            message = choice.get("message") or {}
+            message_content = message.get("content")
+            if isinstance(message_content, str) and message_content:
+                text_parts.append(message_content)
+
+    return "".join(text_parts).strip()
+
+
+def _sanitize_llm_suggestion(text: str) -> str:
+    """清理常见 Markdown 标记，输出可直接展示的纯文本。"""
+    if not text:
+        return ""
+
+    cleaned = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # 去除代码块与行内代码
+    cleaned = re.sub(r"```[\s\S]*?```", "", cleaned)
+    cleaned = re.sub(r"`([^`]*)`", r"\1", cleaned)
+
+    # Markdown 链接: [text](url) -> text
+    cleaned = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", cleaned)
+
+    # 标题/引用/列表标记
+    cleaned = re.sub(r"^\s{0,3}#{1,6}\s*", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"^\s*>\s*", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"^\s*[-*+]\s+", "", cleaned, flags=re.MULTILINE)
+
+    # 粗体/斜体标记
+    cleaned = re.sub(r"\*\*|__|\*|_", "", cleaned)
+
+    # 合并空行并裁剪
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned
 
 
 async def call_llm_analysis(
@@ -258,18 +314,11 @@ async def call_llm_analysis(
     timeout: float = 60.0,
     client: Optional[httpx.AsyncClient] = None,
 ) -> Dict[str, Any]:
-    """
-    调用 OpenAI 兼容 API 生成自然语言停车建议。
-
-    返回：
-    成功 -> {"success": True, "suggestion": "...", "model": "...", "usage": {...}}
-    失败 -> {"success": False, "error": "...", "retryable": bool}
-    """
-    # 构建 zones 摘要文本（非 JSON，更省 token）
+    """调用 OpenAI 兼容 API 生成自然语言停车建议。"""
     zones_summary_parts = []
     for zone in spatial_result.get("zones", []):
         zones_summary_parts.append(
-            f"{zone['label']}：空{zone['empty']}个，占{zone['occupied']}个"
+            f"{zone['label']}：空{zone['empty']}个，占用{zone['occupied']}个"
         )
     spatial_data_text = "\n".join(zones_summary_parts)
 
@@ -291,64 +340,76 @@ async def call_llm_analysis(
         "max_tokens": 300,
         "stream": False,
     }
-
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
     }
 
-    # 确保 api_url 以 /chat/completions 结尾
-    url = api_url.rstrip("/")
-    if not url.endswith("/chat/completions"):
-        url = f"{url}/chat/completions"
+    url = _build_chat_completions_url(api_url)
 
     try:
         if client is not None:
             response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
-            data = response.json()
         else:
-            async with httpx.AsyncClient(timeout=timeout) as temp_client:
+            async with httpx.AsyncClient(
+                timeout=timeout,
+                follow_redirects=True,
+                http2=True,
+            ) as temp_client:
                 response = await temp_client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
-                data = response.json()
 
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        if not content.strip():
+        content_type = (response.headers.get("content-type") or "").lower()
+        response_text = response.text or ""
+        if "text/event-stream" in content_type or response_text.lstrip().startswith("data:"):
+            data = {"model": model, "usage": None}
+            content = _extract_sse_message_content(response_text)
+        else:
+            data = response.json()
+            content = _extract_message_content(data)
+
+        if not content:
+            logger.warning("LLM 返回格式不兼容: url=%s body=%s", url, str(data)[:500])
             return {
                 "success": False,
-                "error": "AI 返回了空内容，请稍后重试",
+                "error": "AI 返回格式不兼容，请检查接口或模型配置",
             }
 
         return {
             "success": True,
-            "suggestion": content.strip(),
+            "suggestion": _sanitize_llm_suggestion(content),
             "model": data.get("model", model),
             "usage": data.get("usage"),
         }
-
     except httpx.TimeoutException:
-        logger.warning("LLM API 超时: url=%s model=%s", api_url, model)
+        logger.warning("LLM API 超时: url=%s model=%s", url, model)
         return {
             "success": False,
             "error": "AI 分析响应超时，已展示基础分析结果",
         }
     except httpx.ConnectError:
-        logger.warning("LLM API 连接失败: url=%s", api_url)
+        logger.warning("LLM API 连接失败: url=%s", url)
         return {
             "success": False,
             "error": "AI 分析服务暂不可用",
+        }
+    except httpx.RequestError as exc:
+        logger.warning("LLM API 请求失败: url=%s type=%s detail=%s", url, type(exc).__name__, exc)
+        return {
+            "success": False,
+            "error": f"AI 服务请求失败：{type(exc).__name__}",
         }
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code
         logger.warning(
             "LLM API 返回错误: status=%s url=%s body=%s",
-            status_code, api_url, exc.response.text[:200],
+            status_code, url, exc.response.text[:200],
         )
         if status_code in (401, 403):
             return {
                 "success": False,
-                "error": "AI 服务认证失败，请联系管理员",
+                "error": "AI 服务认证失败，请检查 API Key",
             }
         if status_code == 429:
             return {
@@ -358,13 +419,13 @@ async def call_llm_analysis(
             }
         return {
             "success": False,
-            "error": f"AI 服务返回错误（HTTP {status_code}）",
+            "error": f"AI 服务返回错误：HTTP {status_code}",
         }
     except Exception as exc:
-        logger.warning("LLM 分析异常: %s", exc)
+        logger.exception("LLM 分析异常: %s", exc)
         return {
             "success": False,
-            "error": "AI 分析暂时不可用，请稍后重试",
+            "error": f"AI 分析失败：{type(exc).__name__}",
         }
 
 
@@ -375,16 +436,7 @@ async def run_full_analysis(
     ai_config: Optional[Dict[str, Any]] = None,
     client: Optional[httpx.AsyncClient] = None,
 ) -> Dict[str, Any]:
-    """
-    统一入口：先执行启发式分析，再根据 ai_config 决定是否调用 LLM。
-
-    返回：
-    {
-        "spatial": {...} | null,   # 启发式结果
-        "llm": {...} | null        # LLM 结果（null=未配置, error=失败）
-    }
-    """
-    # 1. 启发式分析（始终执行，异常兜底）
+    """统一入口：先启发式，再按配置调用 LLM。"""
     spatial_result = None
     try:
         spatial_result = analyze_spatial_distribution(
@@ -395,13 +447,11 @@ async def run_full_analysis(
     except Exception as exc:
         logger.warning("启发式分析异常: %s", exc)
 
-    # 2. LLM 分析（需要配置 + 有检测结果）
     llm_result = None
     if ai_config and spatial_result:
         api_url = (ai_config.get("apiUrl") or "").strip()
         api_key = (ai_config.get("apiKey") or "").strip()
         model_name = (ai_config.get("model") or "gpt-3.5-turbo").strip()
-
         if api_url and api_key:
             llm_result = await call_llm_analysis(
                 spatial_result=spatial_result,
@@ -410,7 +460,6 @@ async def run_full_analysis(
                 model=model_name,
                 client=client,
             )
-        # 未配置 → llm_result 保持 null，前端展示引导提示
 
     return {
         "spatial": spatial_result,
@@ -422,19 +471,10 @@ async def run_llm_only(
     detections: List[dict],
     img_width: int,
     img_height: int,
-    ai_config: Dict[str, Any],
+    ai_config: Optional[Dict[str, Any]] = None,
     client: Optional[httpx.AsyncClient] = None,
 ) -> Dict[str, Any]:
-    """
-    仅执行 LLM 分析（用于异步重试端点）。
-    先做启发式分析（LLM 需要空间数据作为输入），再调用 LLM。
-
-    返回：
-    {
-        "spatial": {...} | null,
-        "llm": {...} | null
-    }
-    """
+    """仅执行 LLM 分析（用于异步重试接口）。"""
     spatial_result = None
     try:
         spatial_result = analyze_spatial_distribution(
@@ -445,13 +485,12 @@ async def run_llm_only(
     except Exception as exc:
         logger.warning("启发式分析异常: %s", exc)
 
-    if not spatial_result:
-        return {"spatial": None, "llm": None}
+    if not ai_config or not spatial_result:
+        return {"spatial": spatial_result, "llm": None}
 
     api_url = (ai_config.get("apiUrl") or "").strip()
     api_key = (ai_config.get("apiKey") or "").strip()
     model_name = (ai_config.get("model") or "gpt-3.5-turbo").strip()
-
     if not api_url or not api_key:
         return {"spatial": spatial_result, "llm": None}
 

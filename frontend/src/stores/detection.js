@@ -404,18 +404,22 @@ export const useDetectionStore = defineStore("detection", () => {
       // 设置当前结果
       currentResult.value = {
         ...resultPayload,
+        type: resultPayload.type || type,
         originalUrl: originalUrl,
         resultUrl: resultUrl,
         isSupabase: !!resultPayload.originalUrlSupabase,
       };
 
       // 自动提取启发式分析结果
-      aiAnalysisResult.value = resultPayload.aiAnalysis || null;
+      aiAnalysisResult.value =
+        type === "image" ? resultPayload.aiAnalysis || null : null;
 
       console.log("[DEBUG] 当前结果设置为:", currentResult.value);
 
       // 异步获取 LLM 分析（不阻塞检测流程）
-      _fetchLlmAnalysis(currentResult.value, authHeader, requestId);
+      if (type === "image") {
+        _fetchLlmAnalysis(currentResult.value, authHeader, requestId);
+      }
 
       // 推送加载历史记录进度
       detectionProgress.value = {
@@ -595,6 +599,7 @@ export const useDetectionStore = defineStore("detection", () => {
 
   // AI 分析重试（带冷却防抖）
   const retryAiAnalysis = async () => {
+    if (currentResult.value?.type === "video") return;
     if (
       !Array.isArray(currentResult.value?.detections) ||
       currentResult.value.detections.length === 0

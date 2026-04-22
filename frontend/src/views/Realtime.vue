@@ -690,6 +690,7 @@ import { buildProtectedApiUrl } from "../utils/protected-url";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const detectionStore = useDetectionStore();
 const LIVE_PREVIEW_RENDER_INTERVAL_MS = 100;
+const LIVE_CAPTURE_INTERVAL_MS = 33;
 
 // ── usePanZoom：鼠标滚轮缩放 + 拖拽平移 ──────────────────────────────
 function usePanZoom(options = {}) {
@@ -1256,7 +1257,7 @@ const startCapture = () => {
   awaitingFrameResult = false;
   pendingFrameRequest = false;
   captureCanvas = captureCanvas || document.createElement("canvas");
-  captureTimer = window.setInterval(requestFrameCapture, getCaptureInterval());
+  captureTimer = window.setInterval(requestFrameCapture, LIVE_CAPTURE_INTERVAL_MS);
   requestFrameCapture();
 };
 
@@ -1288,11 +1289,7 @@ const clearRecordTimer = () => {
 };
 
 const getCaptureInterval = () => {
-  const fps = Number(recordFps.value);
-  if (!Number.isFinite(fps) || fps <= 0) {
-    return 120;
-  }
-  return Math.max(80, Math.round(1000 / fps));
+  return LIVE_CAPTURE_INTERVAL_MS;
 };
 
 const sendFrame = async () => {
@@ -1375,6 +1372,7 @@ const handleSocketMessage = async (event) => {
       event.data instanceof Blob ? await event.data.arrayBuffer() : event.data;
     if (!(buffer instanceof ArrayBuffer)) return;
     awaitingFrameResult = false;
+    flushPendingFrame();
     if (buffer.byteLength < 4) return;
 
     const view = new DataView(buffer);
