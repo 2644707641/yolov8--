@@ -32,10 +32,11 @@ const resizeCanvas = () => {
 }
 
 const drawTrail = () => {
+  if (!ctx) return
   const now = performance.now()
   trail = trail.filter(p => now - p.t < TRAIL_LIFETIME_MS)
   if (ctx) {
-    ctx.clearRect(0, 0, canvasRef.value.width, canvasRef.value.height)
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
     const rgb = hexToRgb(props.color)
     trail.forEach((pos, i) => {
       const ageRatio = 1 - (now - pos.t) / TRAIL_LIFETIME_MS
@@ -63,6 +64,7 @@ const handleMove = (e) => {
 
 
 onMounted(() => {
+  trail = []
   gsap.set(dotRef.value, { xPercent: -50, yPercent: -50 })
   ctx = canvasRef.value?.getContext('2d')
   resizeCanvas()
@@ -77,6 +79,9 @@ onUnmounted(() => {
   window.removeEventListener('touchmove', handleMove)
   window.removeEventListener('resize', resizeCanvas)
   if (animFrameId) cancelAnimationFrame(animFrameId)
+  gsap.killTweensOf(dotRef.value)
+  ctx = null
+  trail = []
 })
 </script>
 

@@ -15,15 +15,14 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useAuthStore } from './stores/auth'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 import gsap from 'gsap'
 import BlobCursor from './components/BlobCursor.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
-const route = useRoute()
 
 const transitionOverlay = ref(false)
 const transitionOpacity = ref(1)
@@ -31,7 +30,7 @@ const transitionOpacity = ref(1)
 const showCursor = ref(true)
 
 // 监听路由变化：从登录页进入时，显示蓝色遮罩并淡出
-router.afterEach((to, from) => {
+const unregisterAfterEach = router.afterEach((to, from) => {
   if (from.path === '/login' && to.path !== '/login') {
     transitionOverlay.value = true
     transitionOpacity.value = 1
@@ -49,6 +48,8 @@ router.afterEach((to, from) => {
     })
   }
 })
+
+onUnmounted(() => unregisterAfterEach())
 
 authStore.initAuth()
 </script>
