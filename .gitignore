@@ -97,3 +97,7 @@ COM4
 LPT1
 LPT2
 LPT3
+
+# AI agent config files
+AGENTS.md
+CLAUDE.md
