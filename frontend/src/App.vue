@@ -9,21 +9,7 @@
   <!-- 斑点光标：仅认证后页面显示 -->
   <BlobCursor
     v-if="showCursor"
-    blobType="circle"
-    fillColor="#06b6d4"
-    :trailCount="3"
-    :sizes="[20, 40, 28]"
-    :innerSizes="[8, 14, 10]"
-    innerColor="rgba(255,255,255,0.8)"
-    :opacities="[0.5, 0.4, 0.35]"
-    shadowColor="rgba(0,0,0,0.75)"
-    :shadowBlur="5"
-    :shadowOffsetX="10"
-    :shadowOffsetY="10"
-    :filterStdDeviation="12"
-    :useFilter="true"
-    :fastDuration="0.1"
-    :slowDuration="0.5"
+    color="#06b6d4"
     :zIndex="9998"
   />
 </template>
