@@ -1,6 +1,5 @@
 @echo off
-setlocal EnableExtensions
-chcp 65001 >nul
+setlocal EnableExtensions EnableDelayedExpansion
 
 cd /d "%~dp0"
 
@@ -8,31 +7,57 @@ set "ROOT_DIR=%~dp0"
 set "BACKEND_DIR=%ROOT_DIR%backend"
 set "FRONTEND_DIR=%ROOT_DIR%frontend"
 set "BACKEND_PYTHON=%BACKEND_DIR%\.venv\Scripts\python.exe"
+set "ENV_FILE=%ROOT_DIR%.env"
+set "LOCAL_API_URL=http://localhost:8000"
+set "CLOUD_API_URL="
 
-if not exist "%BACKEND_PYTHON%" (
-  echo [ERROR] Backend Python not found: %BACKEND_PYTHON%
-  echo Please create backend\.venv and install backend dependencies first.
-  pause
-  exit /b 1
+rem -- Read VITE_CLOUD_API_URL from .env ---------------------------
+if exist "%ENV_FILE%" (
+  for /f "usebackq tokens=1,* delims==" %%a in ("%ENV_FILE%") do (
+    set "_KEY=%%a"
+    if "!_KEY!"=="VITE_CLOUD_API_URL" set "CLOUD_API_URL=%%b"
+  )
 )
 
-if not exist "%FRONTEND_DIR%\node_modules" (
-  echo [ERROR] frontend\node_modules not found.
-  echo Please run pnpm install in the frontend directory first.
-  pause
-  exit /b 1
-)
-
-where pnpm >nul 2>nul
-if errorlevel 1 (
-  echo [ERROR] pnpm is not available in PATH.
-  echo Please install pnpm or add it to PATH first.
-  pause
-  exit /b 1
-)
-
-echo [DEBUG MODE] Starting development services...
+rem -- Display mode selection menu ---------------------------------
 echo.
+echo  ============================================
+echo    YOLOv8 Debug Launcher
+echo  ============================================
+echo.
+echo    [1] Local Backend (debug)
+echo        Backend: hot-reload + debug log
+echo        http://localhost:8000
+echo.
+echo    [2] Cloud Backend (debug)
+echo        Frontend only, connect to cloud
+if defined CLOUD_API_URL (
+  echo        Cloud: !CLOUD_API_URL!
+) else (
+  echo        Cloud: Not configured [set VITE_CLOUD_API_URL in .env]
+)
+echo.
+echo  ============================================
+echo.
+set /p "MODE_CHOICE=Select mode [1/2]: "
+
+if "%MODE_CHOICE%"=="1" goto :mode_local_debug
+if "%MODE_CHOICE%"=="2" goto :mode_cloud_debug
+
+echo [ERROR] Invalid choice. Please enter 1 or 2.
+pause
+exit /b 1
+
+rem -- Mode 1: Local Backend Debug --------------------------------
+:mode_local_debug
+echo.
+echo [MODE] Local Backend (debug)
+echo.
+
+call :check_backend_deps
+if errorlevel 1 exit /b 1
+call :check_frontend_deps
+if errorlevel 1 exit /b 1
 
 call :is_port_listening 8000
 if errorlevel 1 (
@@ -44,24 +69,85 @@ if errorlevel 1 (
   call :print_port_owner 8000
 )
 
+call :start_frontend "%LOCAL_API_URL%"
+
+echo.
+echo Debug mode started!
+echo   Frontend : http://127.0.0.1:5173
+echo   Backend  : http://127.0.0.1:8000 (debug, hot-reload)
+echo   Tip      : Backend auto-reloads on code change, log-level=debug
+exit /b 0
+
+rem -- Mode 2: Cloud Backend Debug --------------------------------
+:mode_cloud_debug
+echo.
+echo [MODE] Cloud Backend (debug)
+echo.
+
+if not defined CLOUD_API_URL (
+  echo [WARN] Cloud backend URL not found.
+  echo [WARN] Set VITE_CLOUD_API_URL in .env or enter it below.
+  echo.
+  set /p "CLOUD_API_URL=Enter cloud backend URL (or press Enter to cancel): "
+  if "!CLOUD_API_URL!"=="" (
+    echo [CANCEL] Cancelled.
+    pause
+    exit /b 1
+  )
+)
+
+echo [INFO] Cloud backend: !CLOUD_API_URL!
+echo.
+
+call :check_frontend_deps
+if errorlevel 1 exit /b 1
+
+call :start_frontend "!CLOUD_API_URL!"
+
+echo.
+echo Debug mode started!
+echo   Frontend : http://127.0.0.1:5173
+echo   Backend  : !CLOUD_API_URL! (cloud)
+echo   Tip      : Frontend runs with strictPort
+exit /b 0
+
+rem -- Utility functions -------------------------------------------
+
+:check_backend_deps
+if not exist "%BACKEND_PYTHON%" (
+  echo [ERROR] Backend Python not found: %BACKEND_PYTHON%
+  echo         Create backend\.venv and install dependencies first.
+  pause
+  exit /b 1
+)
+exit /b 0
+
+:check_frontend_deps
+if not exist "%FRONTEND_DIR%\node_modules" (
+  echo [ERROR] frontend\node_modules not found.
+  echo         Run "pnpm install" in the frontend directory first.
+  pause
+  exit /b 1
+)
+where pnpm >nul 2>nul
+if errorlevel 1 (
+  echo [ERROR] pnpm is not in PATH. Install pnpm first.
+  pause
+  exit /b 1
+)
+exit /b 0
+
+:start_frontend
+set "FE_API_URL=%~1"
 call :is_port_listening 5173
 if errorlevel 1 (
-  echo [START][DEBUG] Frontend: http://127.0.0.1:5173
+  echo [START][DEBUG] Frontend: http://127.0.0.1:5173  (API -^> %FE_API_URL%)
   start "frontend-debug" powershell.exe -NoExit -Command ^
-    "Set-Location '%FRONTEND_DIR%'; pnpm dev --host 0.0.0.0 --port 5173 --strictPort"
+    "$env:VITE_API_URL='%FE_API_URL%'; Set-Location '%FRONTEND_DIR%'; pnpm dev --host 0.0.0.0 --port 5173 --strictPort"
 ) else (
   echo [SKIP] Port 5173 is already in use.
   call :print_port_owner 5173
 )
-
-echo.
-echo Debug launch request processed.
-echo Frontend local: http://127.0.0.1:5173
-echo Backend local:  http://127.0.0.1:8000
-echo Tips:
-echo - Backend runs with auto-reload and debug log level.
-echo - Frontend runs with strict port 5173.
-echo - If either port is occupied, owner process is printed above.
 exit /b 0
 
 :is_port_listening
