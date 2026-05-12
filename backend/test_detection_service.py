@@ -70,6 +70,7 @@ class FakeBoxes:
 
 class FakeResult:
     def __init__(self, frame: np.ndarray):
+        self.orig_img = frame
         self._frame = frame
         self.boxes = FakeBoxes()
         self.names = {}

@@ -77,7 +77,7 @@ def test_auth():
     print("\n测试用户登录...")
 
     # 测试用户登录
-    test_email = "xuwang23333@gmail.com"
+    test_email = "123@qq.com"
     test_password = "123456"
 
     auth_url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"

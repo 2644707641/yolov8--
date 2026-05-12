@@ -2000,6 +2000,7 @@ import { useAuthStore } from "../stores/auth";
 import { useDetectionStore } from "../stores/detection";
 import { supabase } from "../config/supabase";
 import { buildProtectedApiUrl } from "../utils/protected-url";
+import { getRealtimeSamplingPlan } from "../utils/realtime-video";
 import AiAnalysisPanel from "../components/AiAnalysisPanel.vue";
 
 const authStore = useAuthStore();
@@ -2476,43 +2477,34 @@ const runRealtimeVideoDetection = async (file) => {
       throw new Error("无法创建画布上下文");
     }
 
-    const sampleInterval = 1 / sampleFps;
-    const totalFrames = Math.max(1, Math.ceil(duration / sampleInterval));
+    // 纯时间戳 seek 方案，完全避免帧重叠和重复
+    const { timestamps, totalFrames } = getRealtimeSamplingPlan({
+      durationSeconds: duration,
+      frameSkip: detectionStore.detectionParams.frameSkip || 1,
+      sourceFps: expectedFps,
+      fallbackSourceFps: 25,
+      minSampleFps: 2,
+      maxSampleFps: 12,
+    });
     realtimeState.value.totalFrames = totalFrames;
 
+    // 不需要播放视频，只需 seek 到每个时间点并抓帧
     await video.play();
-    let nextCaptureTime = 0;
-    let sentFrames = 0;
+    video.pause(); // 立即暂停，后续通过 seek 移动位置
 
-    while (sentFrames < totalFrames) {
-      if (stopRealtimeRequested) {
-        throw new Error("实时识别已取消");
-      }
-
-      if (video.ended) {
-        break;
-      }
-
-      if (video.currentTime + 0.001 < nextCaptureTime) {
-        await sleep(8);
-        continue;
-      }
-
+    const sendFrame = async () => {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const frameBlob = await canvasToJpegBlob(canvas);
       const frameBuffer = await frameBlob.arrayBuffer();
       realtimeSocket.send(frameBuffer);
-
-      sentFrames += 1;
-      realtimeState.value.sentFrames = sentFrames;
-      nextCaptureTime += sampleInterval;
+      realtimeState.value.sentFrames = realtimeState.value.sentFrames + 1;
 
       const packet = await waitForSocketPacket(realtimeSocket);
       if (packet.type === "error") {
         throw new Error(packet.detail || "实时识别帧处理失败");
       }
       if (packet.type !== "frame") {
-        continue;
+        return;
       }
 
       realtimeState.value.processedFrames =
@@ -2523,9 +2515,21 @@ const runRealtimeVideoDetection = async (file) => {
       if (packet.imageBlob) {
         updateRealtimePreview(packet.imageBlob);
       }
-    }
+    };
 
-    video.pause();
+    for (let i = 0; i < timestamps.length; i++) {
+      if (stopRealtimeRequested) {
+        throw new Error("实时识别已取消");
+      }
+
+      const targetTime = timestamps[i];
+      video.currentTime = targetTime;
+      await new Promise((resolve) => {
+        video.onseeked = resolve;
+      });
+
+      await sendFrame();
+    }
 
     realtimeSocket.send(JSON.stringify({ type: "end" }));
     const donePacket = await waitForSocketPacket(realtimeSocket);
