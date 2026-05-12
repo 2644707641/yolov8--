@@ -37,20 +37,20 @@ else:
 try:
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("\n✓ Supabase 客户端创建成功")
-    
+
     # 测试是否能访问管理功能
     print("\n正在测试 service_role 权限...")
-    
+
     # service_role key 应该能够获取用户信息
     # 这里我们只是测试客户端是否正常工作
     print("✓ 客户端初始化正常，可以进行认证验证")
-    
+
     print("\n" + "=" * 60)
     print("✅ 配置正确！后端应该可以验证用户 token 了")
     print("=" * 60)
     print("\n请重启后端服务：")
     print("  python backend/main.py")
-    
+
 except Exception as e:
     print(f"\n❌ 错误：无法创建 Supabase 客户端")
     print(f"   详情: {e}")

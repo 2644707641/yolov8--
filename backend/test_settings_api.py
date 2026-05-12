@@ -106,6 +106,13 @@ def run():
         temporary_settings_store_file() as paths,
         temporary_supabase_client(None),
     ):
+        from datetime import datetime, timedelta, timezone
+
+        now_utc = datetime.now(timezone.utc)
+        recent_date = (now_utc - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        older_date = (now_utc - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        archive_date = (now_utc - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
         payload = {
             "app_settings": {},
             "user_settings": {},
@@ -118,7 +125,7 @@ def run():
                     "result_file": "/api/results/result_test-user_keep.jpg",
                     "detections": [],
                     "params": {},
-                    "created_at": "2026-03-12T12:00:00+00:00",
+                    "created_at": recent_date,
                 },
                 {
                     "id": "history-old",
@@ -128,7 +135,7 @@ def run():
                     "result_file": "/api/results/result_test-user_old.jpg",
                     "detections": [],
                     "params": {},
-                    "created_at": "2026-03-11T12:00:00+00:00",
+                    "created_at": older_date,
                 },
             ],
             "history_archives": [
@@ -141,7 +148,7 @@ def run():
                     "result_file": "https://example.com/result.jpg",
                     "detections": [],
                     "params": {},
-                    "deleted_at": "2026-03-10T12:00:00+00:00",
+                    "deleted_at": archive_date,
                     "is_restored": False,
                 }
             ],
