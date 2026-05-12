@@ -147,7 +147,8 @@ describe('ModelWeights', () => {
     const wrapper = mount(ModelWeights, {
       global: {
         stubs: {
-          RouterLink: RouterLinkStub
+          RouterLink: RouterLinkStub,
+          Teleport: true
         }
       }
     })

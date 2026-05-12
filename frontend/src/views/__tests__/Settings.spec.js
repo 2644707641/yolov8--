@@ -235,21 +235,27 @@ describe('Settings', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const [, saveRequest] = fetchMock.mock.calls[1]
-    expect(JSON.parse(saveRequest.body)).toEqual({
-      defaults: {
-        imgSize: 640,
-        confidence: 0.77,
-        iouThreshold: 0.55,
-        maxDetections: 240,
-        frameSkip: 2
-      },
-      storage: {
-        localCleanup: {
-          enabled: false,
-          retentionDays: 14,
-          maxRecords: 120
-        }
+    const savedBody = JSON.parse(saveRequest.body)
+    expect(savedBody.defaults).toEqual({
+      imgSize: 640,
+      confidence: 0.77,
+      iouThreshold: 0.55,
+      maxDetections: 240,
+      frameSkip: 2
+    })
+    expect(savedBody.storage).toEqual({
+      localCleanup: {
+        enabled: false,
+        retentionDays: 14,
+        maxRecords: 120
       }
+    })
+    expect(savedBody.realtime).toEqual({
+      recordEnabled: true,
+      recordFps: 8,
+      recordDurationSeconds: 0,
+      sourceMode: 'camera',
+      networkStreamUrl: ''
     })
     expect(wrapper.text()).toContain('未启用')
     expect(wrapper.text()).toContain('14 天')
