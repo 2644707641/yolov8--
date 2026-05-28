@@ -10,6 +10,7 @@ set "BACKEND_PYTHON=%BACKEND_DIR%\.venv\Scripts\python.exe"
 set "ENV_FILE=%ROOT_DIR%.env"
 set "LOCAL_API_URL=http://localhost:8000"
 set "CLOUD_API_URL="
+set "FRONTEND_RUN_DEV="
 
 rem -- Read VITE_CLOUD_API_URL from .env ---------------------------
 if exist "%ENV_FILE%" (
@@ -123,13 +124,22 @@ exit /b 0
 :check_frontend_deps
 if not exist "%FRONTEND_DIR%\node_modules" (
   echo [ERROR] frontend\node_modules not found.
-  echo         Run "pnpm install" in the frontend directory first.
+  echo         Run "npm install" or "pnpm install" in the frontend directory first.
   pause
   exit /b 1
 )
 where pnpm >nul 2>nul
-if errorlevel 1 (
-  echo [ERROR] pnpm is not in PATH. Install pnpm first.
+if not errorlevel 1 (
+  set "FRONTEND_RUN_DEV=pnpm dev"
+  exit /b 0
+)
+where npm >nul 2>nul
+if not errorlevel 1 (
+  set "FRONTEND_RUN_DEV=npm run dev --"
+  exit /b 0
+)
+if not defined FRONTEND_RUN_DEV (
+  echo [ERROR] Neither pnpm nor npm is in PATH. Install Node.js first.
   pause
   exit /b 1
 )
@@ -140,7 +150,7 @@ set "FE_API_URL=%~1"
 call :is_port_listening 5173
 if errorlevel 1 (
   echo [START] Frontend: http://127.0.0.1:5173  (API -^> %FE_API_URL%)
-  start "frontend-dev" powershell.exe -NoExit -Command "$env:VITE_API_URL='%FE_API_URL%'; Set-Location '%FRONTEND_DIR%'; pnpm dev --host 0.0.0.0 --port 5173"
+  start "frontend-dev" powershell.exe -NoExit -Command "$env:VITE_API_URL='%FE_API_URL%'; Set-Location '%FRONTEND_DIR%'; !FRONTEND_RUN_DEV! --host 0.0.0.0 --port 5173"
 ) else (
   echo [SKIP] Port 5173 is already in use.
   call :print_port_owner 5173

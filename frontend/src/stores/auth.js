@@ -129,6 +129,12 @@ export const useAuthStore = defineStore('auth', () => {
         throw signInError
       }
 
+      const signedInUser = data?.user || data?.session?.user || null
+      if (signedInUser) {
+        user.value = signedInUser
+        ready.value = true
+      }
+
       return { success: true, data }
     } catch (err) {
       console.error('登录失败:', err)
